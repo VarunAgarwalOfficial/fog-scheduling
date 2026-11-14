@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fog scheduling</title>
+    <link rel="stylesheet" href="/src/web/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Fog scheduling</h1>
+      <p>
+        Users send tasks to the nearest fog node. A fog node is close but small, so it keeps a few
+        tasks and sends the rest to a larger, slower-to-reach cloud. The scheduling policy decides
+        which tasks stay and what runs first. All four policies below run on the same tasks.
+      </p>
+    </header>
+
+    <form id="controls" class="controls" aria-label="Simulation settings"></form>
+
+    <main>
+      <section class="panel" aria-labelledby="live-title">
+        <div class="panel-head">
+          <h2 id="live-title">Network</h2>
+          <div class="row">
+            <label>Policy <select id="policy"></select></label>
+            <button type="button" id="play">Pause</button>
+            <button type="button" id="restart">Restart</button>
+            <label>Speed <input id="speed" type="range" min="1" max="40" value="6" /></label>
+          </div>
+        </div>
+        <p id="policy-summary" class="note"></p>
+        <canvas id="network" width="640" height="640" role="img" aria-label="Users, fog nodes and the cloud, with tasks moving between them"></canvas>
+        <ul class="legend">
+          <li><span class="dot user"></span>user</li>
+          <li><span class="dot fog"></span>fog node (number is tasks held)</li>
+          <li><span class="dot cloud"></span>cloud (busy servers + waiting)</li>
+          <li><span class="dot urgent"></span>urgent task (priority 7 to 9)</li>
+          <li><span class="dot routine"></span>other task</li>
+        </ul>
+        <dl id="live" class="stats"></dl>
+      </section>
+
+      <section class="panel" aria-labelledby="compare-title">
+        <div class="panel-head">
+          <h2 id="compare-title">Comparison</h2>
+          <span id="workload-note" class="note"></span>
+        </div>
+        <div class="charts">
+          <figure id="chart-mean"></figure>
+          <figure id="chart-urgent"></figure>
+          <figure id="chart-cost"></figure>
+          <figure id="chart-late"></figure>
+        </div>
+        <figure id="chart-priority" class="wide"></figure>
+        <div class="table-wrap"><table id="results"></table></div>
+      </section>
+    </main>
+    <div id="tooltip" class="tooltip" hidden></div>
+    <script type="module" src="/src/web/main.ts"></script>
+  </body>
+</html>

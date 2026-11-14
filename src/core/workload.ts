@@ -2,15 +2,15 @@ import { type Config, MAX_PRIORITY, MIN_PRIORITY, type Task, type Topology } fro
 import { createRng } from "./rng.ts";
 
 /**
- * Place the cloud at the centre, fog nodes near it and users further out,
+ * Scatter users over a square, fog nodes over its middle and put the cloud far away,
  * then attach every user to its nearest fog node.
  */
 export function buildTopology(config: Config): Topology {
   if (config.fogNodes < 1) throw new Error("at least one fog node is required");
   const rng = createRng(config.seed);
   const fogs = Array.from({ length: config.fogNodes }, () => ({
-    x: rng.int(-100, 100),
-    y: rng.int(-100, 100),
+    x: rng.int(-180, 180),
+    y: rng.int(-180, 180),
   }));
   const users = Array.from({ length: config.users }, () => ({
     x: rng.int(-300, 300),
@@ -28,7 +28,7 @@ export function buildTopology(config: Config): Topology {
     });
     return best;
   });
-  return { cloud: { x: 0, y: 0 }, fogs, users, userFog };
+  return { cloud: { x: 0, y: -380 }, fogs, users, userFog };
 }
 
 /**
