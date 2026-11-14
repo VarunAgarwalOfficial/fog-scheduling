@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Fog and cloud task scheduling simulation that compares priority, shortest-job-first and hybrid policies.",
+  "description": "Fog and cloud task scheduling simulation that compares six scheduling policies over many seeds and checks them against queueing theory.",
   "scripts": {
     "compare": "node src/cli.ts compare",
     "theory": "node src/cli.ts theory",

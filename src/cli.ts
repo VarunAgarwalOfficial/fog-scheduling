@@ -176,7 +176,11 @@ function theoryReport(points: LoadPoint[], seeds: number[], base: Partial<Config
   });
   out.push(
     "Work-weighted mean wait, the conservation law: the same for every order on the same tasks.",
-    `Largest difference between orders at any load: ${Math.max(...spread).toExponential(1)} ticks.`,
+    `Largest difference between orders at any load: ${
+      Math.max(...spread) < 1e-9
+        ? "none beyond rounding error"
+        : `${Math.max(...spread).toExponential(1)} ticks`
+    }.`,
   );
   return out.join("\n");
 }
