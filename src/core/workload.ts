@@ -34,11 +34,16 @@ export function buildTopology(config: Config): Topology {
 /**
  * Create the full list of tasks up front, ordered by arrival tick.
  * Every policy is then run on this same list, so differences in the
- * results come from the policy and not from luck.
+ * results come from the policy and not from luck. `seed` picks the workload only;
+ * the topology comes from `config.seed`.
  */
-export function generateWorkload(config: Config, topology: Topology): Task[] {
+export function generateWorkload(
+  config: Config,
+  topology: Topology,
+  seed: number = config.seed,
+): Task[] {
   // A different stream from the topology, so changing one does not shift the other.
-  const rng = createRng(config.seed ^ 0x9e3779b9);
+  const rng = createRng(seed ^ 0x9e3779b9);
   const tasks: Task[] = [];
   for (let tick = 0; tick < config.ticks; tick++) {
     for (let user = 0; user < config.users; user++) {

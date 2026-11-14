@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { comparePolicies, runPolicy } from "../src/core/metrics.ts";
+import { interval, replicate, tQuantile } from "../src/core/experiment.ts";
+import { runPolicy } from "../src/core/metrics.ts";
 import { defaultConfig, type Task } from "../src/core/model.ts";
-import { getPolicy, policies } from "../src/core/policies.ts";
+import { getPolicy, orderOnly, policies } from "../src/core/policies.ts";
 import { createSimulation } from "../src/core/sim.ts";
+import { firstComeWait, runQueue, singleQueue } from "../src/core/theory.ts";
 import { buildTopology, generateWorkload } from "../src/core/workload.ts";
 import { task, tiny } from "./helpers.ts";
 
@@ -57,8 +59,9 @@ test("a full fog node sends away the task its policy ranks last", () => {
 });
 
 test("queues follow the policy and a started task is not interrupted", () => {
-  const finishOrder = (policy: string, workload: Task[]) => {
-    const sim = createSimulation(tiny, getPolicy(policy), workload);
+  const finishOrder = (policy: string, workload: Task[], admitAll = false) => {
+    const chosen = admitAll ? orderOnly(getPolicy(policy)) : getPolicy(policy);
+    const sim = createSimulation({ ...tiny, fogCapacity: 10 }, chosen, workload);
     while (!sim.done) sim.step();
     return sim.outcomes.map((o) => o.task.id);
   };
@@ -69,12 +72,68 @@ test("queues follow the policy and a started task is not interrupted", () => {
   // The long task starts alone; an emergency arriving a tick later must wait for it.
   const late = [task({ id: 0, work: 9, priority: 5 }), task({ id: 1, arrival: 1, priority: 9 })];
   assert.deepEqual(finishOrder("priority", late), [0, 1]);
+  // Three tasks queue behind a running one. Work per unit of priority: 2, 1 and 0.67,
+  // so the weighted rule differs from both shortest-first and most-urgent-first.
+  const three = [
+    task({ id: 0, work: 3, priority: 5 }),
+    task({ id: 1, work: 2, priority: 1, arrival: 1 }),
+    task({ id: 2, work: 9, priority: 9, arrival: 1 }),
+    task({ id: 3, work: 4, priority: 6, arrival: 1 }),
+  ];
+  assert.deepEqual(finishOrder("sjf", three, true), [0, 1, 3, 2]);
+  assert.deepEqual(finishOrder("priority", three, true), [0, 2, 3, 1]);
+  assert.deepEqual(finishOrder("wsjf", three, true), [0, 3, 2, 1]);
   // The mix: urgent first on fog with shortest as tie-break, shortest first on the cloud.
   const hybrid = getPolicy("hybrid");
   const short = task({ id: 1, work: 2, priority: 7 });
-  assert.ok(hybrid.fogOrder(short, task({ id: 0, work: 8, priority: 7 })) < 0);
-  assert.ok(hybrid.fogOrder(task({ id: 2, work: 9, priority: 9 }), short) < 0);
-  assert.ok(hybrid.cloudOrder(short, task({ id: 2, work: 9, priority: 9 })) < 0);
+  assert.ok(hybrid.fogOrder(short, task({ id: 0, work: 8, priority: 7 }), tiny) < 0);
+  assert.ok(hybrid.fogOrder(task({ id: 2, work: 9, priority: 9 }), short, tiny) < 0);
+  assert.ok(hybrid.cloudOrder(short, task({ id: 2, work: 9, priority: 9 }), tiny) < 0);
+});
+
+test("ageing bounds how long an emergency stream can hold back a routine task", () => {
+  // One task per tick of service, a priority 1 task at tick 0 and an emergency every tick.
+  // Strict priority serves it after all 40 emergencies. With one level per 2 ticks it can
+  // only be overtaken by emergencies that arrive at most 8 * 2 ticks after it.
+  const config = { ...tiny, fogCapacity: 100, ageing: 2 };
+  const workload = [
+    task({ id: 0, priority: 9 }),
+    task({ id: 1, priority: 1 }),
+    ...Array.from({ length: 40 }, (_, i) => task({ id: i + 2, priority: 9, arrival: i + 1 })),
+  ];
+  const lowResponse = (policy: string) => {
+    const sim = createSimulation(config, orderOnly(getPolicy(policy)), workload);
+    while (!sim.done) sim.step();
+    return sim.outcomes.find((o) => o.task.id === 1)!.response;
+  };
+  assert.equal(lowResponse("priority"), 42);
+  assert.equal(lowResponse("ageing"), 1 + 8 * 2 + 1);
+});
+
+test("one queue: first come, first served matches the formula and work is conserved", () => {
+  const config = singleQueue(0.5, { ticks: 100000 });
+  const workload = generateWorkload(config, buildTopology(config));
+  const runs = policies.map((p) => runQueue(config, p, workload));
+  const formula = firstComeWait(config);
+  assert.ok(Math.abs(runs[0]!.meanWait - formula) / formula < 0.05, `${runs[0]!.meanWait}`);
+  // Kleinrock's conservation law holds sample path by sample path: every order that keeps
+  // the server busy whenever there is work gives the same work-weighted wait.
+  for (const run of runs)
+    assert.ok(Math.abs(run.workWeightedWait - runs[0]!.workWeightedWait) < 1e-9);
+  const byId = Object.fromEntries(policies.map((p, i) => [p.id, runs[i]!]));
+  for (const run of runs) {
+    assert.ok(byId.sjf!.meanWait <= run.meanWait);
+    assert.ok(byId.wsjf!.weightedWait <= run.weightedWait);
+  }
+});
+
+test("confidence intervals use Student's t", () => {
+  const ci = interval([1, 2, 3, 4, 5, Number.NaN]);
+  assert.equal(ci.n, 5);
+  assert.equal(ci.mean, 3);
+  assert.ok(Math.abs(ci.half - 2.776 * Math.sqrt(2.5 / 5)) < 1e-9);
+  assert.ok(tQuantile(31) < tQuantile(30) && tQuantile(31) > 2.03);
+  assert.ok(Math.abs(tQuantile(1000) - 1.962) < 0.001);
 });
 
 test("every task is answered once, within capacity and physical limits", () => {
@@ -103,14 +162,18 @@ test("every task is answered once, within capacity and physical limits", () => {
   }
 });
 
-test("on the same workload the policies do what they are for", () => {
-  const workload = generateWorkload(defaultConfig, buildTopology(defaultConfig));
-  const [fcfs, priority, sjf] = comparePolicies(defaultConfig, workload);
-  assert.deepEqual(comparePolicies(defaultConfig, workload)[1], priority, "repeatable");
-  // Priority answers emergencies faster than routine tasks and faster than a blind scheduler.
-  assert.ok(priority!.responseByPriority[8]! < priority!.responseByPriority[0]!);
-  assert.ok(priority!.urgentResponse < fcfs!.urgentResponse);
-  // Shortest job first gives the lowest mean response time.
-  assert.ok(sjf!.meanResponse < fcfs!.meanResponse);
-  assert.ok(sjf!.meanResponse < priority!.meanResponse);
+test("over several workloads the policies do what they are for", () => {
+  const { results } = replicate({ ...defaultConfig, cloudServers: 13 }, 4);
+  const [fcfs, priority, sjf, , wsjf, ageing] = results.map((r) => r.stats);
+  // Priority answers emergencies faster than a blind scheduler and starves priority 1.
+  assert.ok(priority!.urgentResponse.mean < fcfs!.urgentResponse.mean);
+  assert.ok(priority!.lowTail.mean > 4 * fcfs!.lowTail.mean);
+  // Ageing cuts that tail and keeps most of the gain for emergencies.
+  assert.ok(ageing!.lowTail.mean < priority!.lowTail.mean / 2);
+  assert.ok(ageing!.urgentResponse.mean < fcfs!.urgentResponse.mean);
+  // Shortest job first gives the lowest mean, the weighted rule the lowest weighted mean.
+  for (const r of results) {
+    assert.ok(sjf!.meanResponse.mean <= r.stats.meanResponse.mean);
+    assert.ok(wsjf!.weightedResponse.mean <= r.stats.weightedResponse.mean);
+  }
 });

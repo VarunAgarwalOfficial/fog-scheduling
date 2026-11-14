@@ -50,21 +50,79 @@ export interface Simulation {
   readonly done: boolean;
 }
 
-function takeFirst(queue: Task[], order: Order): Task | undefined {
+function takeFirst(queue: Task[], order: Order, config: Config): Task | undefined {
   if (queue.length === 0) return undefined;
   let best = 0;
   for (let i = 1; i < queue.length; i++) {
-    if (order(queue[i]!, queue[best]!) < 0) best = i;
+    if (order(queue[i]!, queue[best]!, config) < 0) best = i;
   }
   return queue.splice(best, 1)[0];
 }
 
-function takeLast(queue: Task[], order: Order): Task {
+function takeLast(queue: Task[], order: Order, config: Config): Task {
   let worst = 0;
   for (let i = 1; i < queue.length; i++) {
-    if (order(queue[i]!, queue[worst]!) > 0) worst = i;
+    if (order(queue[i]!, queue[worst]!, config) > 0) worst = i;
   }
   return queue.splice(worst, 1)[0]!;
+}
+
+/**
+ * Binary heap for the cloud queue, which can grow long when the cloud is overloaded.
+ * Every order is fixed once the tasks exist, so a heap stays valid as time passes.
+ */
+class Heap {
+  private items: Task[] = [];
+  private readonly order: Order;
+  private readonly config: Config;
+
+  constructor(order: Order, config: Config) {
+    this.order = order;
+    this.config = config;
+  }
+
+  get length(): number {
+    return this.items.length;
+  }
+
+  private before(i: number, j: number): boolean {
+    return this.order(this.items[i]!, this.items[j]!, this.config) < 0;
+  }
+
+  private swap(i: number, j: number): void {
+    const items = this.items;
+    [items[i], items[j]] = [items[j]!, items[i]!];
+  }
+
+  push(task: Task): void {
+    this.items.push(task);
+    let i = this.items.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!this.before(i, parent)) break;
+      this.swap(i, parent);
+      i = parent;
+    }
+  }
+
+  pop(): Task | undefined {
+    const items = this.items;
+    if (items.length <= 1) return items.pop();
+    const top = items[0];
+    items[0] = items.pop()!;
+    let i = 0;
+    for (;;) {
+      const left = 2 * i + 1;
+      const right = left + 1;
+      let best = i;
+      if (left < items.length && this.before(left, best)) best = left;
+      if (right < items.length && this.before(right, best)) best = right;
+      if (best === i) break;
+      this.swap(i, best);
+      i = best;
+    }
+    return top;
+  }
 }
 
 /**
@@ -87,7 +145,7 @@ export function createSimulation(config: Config, policy: Policy, workload: Task[
     waiting: [],
   }));
   const transit: { task: Task; arrives: number }[] = [];
-  const cloudWaiting: Task[] = [];
+  const cloudWaiting = new Heap(policy.cloudOrder, config);
   const cloudRunning: Running[] = [];
   const outcomes: Outcome[] = [];
   let fogCost = 0;
@@ -131,7 +189,7 @@ export function createSimulation(config: Config, policy: Policy, workload: Task[
       }
       fog.waiting.push(task);
       const held = fog.waiting.length + (fog.running ? 1 : 0);
-      if (held > config.fogCapacity) offload(takeLast(fog.waiting, policy.fogOrder));
+      if (held > config.fogCapacity) offload(takeLast(fog.waiting, policy.fogOrder, config));
     }
 
     // 2. Tasks leave the network and join the cloud queue.
@@ -142,7 +200,7 @@ export function createSimulation(config: Config, policy: Policy, workload: Task[
     // 3a. Fog nodes work.
     for (const fog of fogs) {
       if (!fog.running) {
-        const task = takeFirst(fog.waiting, policy.fogOrder);
+        const task = takeFirst(fog.waiting, policy.fogOrder, config);
         if (task) fog.running = { task, remaining: task.work };
       }
       if (!fog.running) continue;
@@ -156,7 +214,7 @@ export function createSimulation(config: Config, policy: Policy, workload: Task[
 
     // 3b. Cloud servers work.
     while (cloudRunning.length < config.cloudServers) {
-      const task = takeFirst(cloudWaiting, policy.cloudOrder);
+      const task = cloudWaiting.pop();
       if (!task) break;
       cloudCost += task.work * config.cloudCostPerUnit;
       cloudRunning.push({ task, remaining: task.work });

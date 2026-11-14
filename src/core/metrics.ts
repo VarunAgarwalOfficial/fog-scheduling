@@ -9,6 +9,10 @@ export interface Result {
   p95Response: number;
   /** Mean response of tasks with priority 7 to 9. */
   urgentResponse: number;
+  /** Mean response weighted by priority: sum of priority * response over sum of priority. */
+  weightedResponse: number;
+  /** 99th percentile response of priority 1 tasks: where starvation shows. */
+  lowTail: number;
   /** Mean response per priority; index 0 is priority 1. NaN when there were no such tasks. */
   responseByPriority: number[];
   /** Share of tasks answered after their deadline. */
@@ -62,6 +66,13 @@ export function summarise(
     meanResponse: mean(responses),
     p95Response: percentile(responses, 95),
     urgentResponse: mean(urgent.map((o) => o.response)),
+    weightedResponse:
+      outcomes.reduce((sum, o) => sum + o.task.priority * o.response, 0) /
+      outcomes.reduce((sum, o) => sum + o.task.priority, 0),
+    lowTail: percentile(
+      outcomes.filter((o) => o.task.priority === MIN_PRIORITY).map((o) => o.response),
+      99,
+    ),
     responseByPriority,
     lateShare: share(outcomes.filter((o) => o.late).length, outcomes.length),
     urgentLateShare: share(urgent.filter((o) => o.late).length, urgent.length),

@@ -50,6 +50,8 @@ export interface Config {
   cloudCostPerUnit: number;
   /** Ticks a task spends on the network when it is sent to the cloud. */
   cloudLatency: number;
+  /** Priority with ageing: a waiting task gains one priority level per this many ticks. */
+  ageing: number;
 }
 
 export const defaultConfig: Config = {
@@ -65,6 +67,7 @@ export const defaultConfig: Config = {
   cloudServers: 14,
   cloudCostPerUnit: 1,
   cloudLatency: 3,
+  ageing: 20,
 };
 
 export const MIN_PRIORITY = 1;

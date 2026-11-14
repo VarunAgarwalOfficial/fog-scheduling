@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Fog and cloud task scheduling simulation that compares priority, shortest-job-first and hybrid policies.",
   "scripts": {
-    "compare": "node src/cli.ts",
+    "compare": "node src/cli.ts compare",
+    "theory": "node src/cli.ts theory",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
