@@ -1,5 +1,6 @@
 import type { Config, Point, Task, Topology } from "../core/model.ts";
 import type { Snapshot } from "../core/sim.ts";
+import type { Palette } from "./shared/theme.js";
 
 interface Particle {
   from: Point;
@@ -20,6 +21,7 @@ export class NetworkView {
   private readonly canvas: HTMLCanvasElement;
   private topology: Topology;
   private config: Config;
+  private colours: Palette | null = null;
 
   constructor(canvas: HTMLCanvasElement, topology: Topology, config: Config) {
     this.canvas = canvas;
@@ -33,6 +35,26 @@ export class NetworkView {
     this.config = config;
     this.particles = [];
     this.last = null;
+  }
+
+  /** Colours for the current theme, from the shared palette. */
+  setColours(colours: Palette): void {
+    this.colours = colours;
+  }
+
+  /** Match the drawing buffer to the displayed size, for sharp lines on any screen. */
+  private fit(): { width: number; height: number } {
+    const { canvas } = this;
+    const width = canvas.clientWidth || 600;
+    const height = Math.round(width * 1.1);
+    const ratio = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(width * ratio)) {
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      canvas.style.height = `${height}px`;
+    }
+    this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    return { width, height };
   }
 
   /** Record what happened in a tick so it can be drawn. */
@@ -59,19 +81,20 @@ export class NetworkView {
 
   /** Draw the state at a fractional tick. */
   draw(time: number): void {
-    const { canvas, ctx, topology } = this;
-    const style = getComputedStyle(document.documentElement);
-    const color = (name: string) => style.getPropertyValue(name).trim();
+    const { ctx, topology, colours: c } = this;
+    if (!c) return;
+    const { width, height } = this.fit();
     // World coordinates run from -300 to 300 across and from -420 (the cloud) to 300 down.
-    const scale = Math.min((canvas.width - 48) / 600, (canvas.height - 48) / 720);
+    const scale = Math.min((width - 32) / 600, (height - 32) / 720);
     const px = (p: Point) => ({
-      x: canvas.width / 2 + p.x * scale,
-      y: canvas.height / 2 + (p.y + 60) * scale,
+      x: width / 2 + p.x * scale,
+      y: height / 2 + (p.y + 60) * scale,
     });
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const radius = (r: number) => Math.max(r * 0.6, r * Math.min(1, scale * 1.4));
+    ctx.clearRect(0, 0, width, height);
 
     ctx.lineWidth = 1;
-    ctx.strokeStyle = color("--grid");
+    ctx.strokeStyle = c.faint;
     topology.users.forEach((user, i) => {
       const a = px(user);
       const b = px(topology.fogs[topology.userFog[i]!]!);
@@ -80,8 +103,8 @@ export class NetworkView {
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
     });
-    ctx.strokeStyle = color("--border");
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = c.muted;
+    ctx.lineWidth = 1.5;
     const cloud = px(topology.cloud);
     for (const fog of topology.fogs) {
       const a = px(fog);
@@ -91,7 +114,7 @@ export class NetworkView {
       ctx.stroke();
     }
 
-    ctx.fillStyle = color("--user");
+    ctx.fillStyle = c.muted;
     for (const user of topology.users) {
       const p = px(user);
       ctx.beginPath();
@@ -105,7 +128,7 @@ export class NetworkView {
       const k = (time - p.start) / (p.end - p.start);
       const a = px(p.from);
       const b = px(p.to);
-      ctx.fillStyle = color(p.urgent ? "--urgent" : "--routine");
+      ctx.fillStyle = p.urgent ? c.change : c.ink;
       ctx.beginPath();
       ctx.arc(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, p.urgent ? 3.5 : 2.5, 0, Math.PI * 2);
       ctx.fill();
@@ -113,23 +136,23 @@ export class NetworkView {
 
     const label = (p: { x: number; y: number }, r: number, fill: string, text: string) => {
       ctx.fillStyle = fill;
-      ctx.strokeStyle = color("--surface");
+      ctx.strokeStyle = c.bg;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "600 12px system-ui, sans-serif";
+      ctx.fillStyle = c.bg;
+      ctx.font = `600 ${r > 14 ? 12 : 11}px "IBM Plex Sans", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(text, p.x, p.y + 0.5);
     };
     topology.fogs.forEach((fog, i) => {
-      label(px(fog), 11, color("--fog"), String(this.last?.fogLoad[i] ?? 0));
+      label(px(fog), radius(11), c.accent, String(this.last?.fogLoad[i] ?? 0));
     });
     const busy = this.last?.cloudBusy ?? 0;
     const waiting = this.last?.cloudWaiting ?? 0;
-    label(cloud, 22, color("--cloud"), `${busy}+${waiting}`);
+    label(cloud, radius(22), c.series[2]!, `${busy}+${waiting}`);
   }
 }

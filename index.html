@@ -4,59 +4,138 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Fog scheduling</title>
-    <link rel="stylesheet" href="/src/web/style.css" />
+    <meta
+      name="description"
+      content="Six task scheduling policies for a fog and cloud network, compared over many workloads, with a check against queueing theory."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='3.5' r='2' fill='%232f6f6a'/%3E%3Ccircle cx='3.5' cy='12' r='2' fill='%232f6f6a'/%3E%3Ccircle cx='12.5' cy='12' r='2' fill='%232f6f6a'/%3E%3Cpath d='M8 5.5L3.5 10M8 5.5l4.5 4.5' stroke='%232f6f6a' stroke-width='1.2'/%3E%3C/svg%3E"
+    />
+    <script type="module" src="/src/web/main.ts"></script>
   </head>
   <body>
-    <header>
-      <h1>Fog scheduling</h1>
-      <p>
-        Users send tasks to the nearest fog node. A fog node is close but small, so it keeps a few
-        tasks and sends the rest to a larger, slower-to-reach cloud. The scheduling policy decides
-        which tasks stay and what runs first. All four policies below run on the same tasks.
-      </p>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <h1 class="site-title">Fog scheduling</h1>
+      <button id="theme" class="quiet" type="button">Theme: auto</button>
     </header>
+    <main id="main">
+      <p class="lede">
+        Users send tasks to their nearest fog node. A fog node is close but small, so it keeps a
+        few tasks and sends the rest to a larger cloud that takes a few ticks to reach. The
+        scheduling policy decides which tasks stay and what runs first. Every policy runs on the
+        same tasks, over many independent workloads, and the results come with 95% confidence
+        intervals. What it finds is what queueing theory predicts; the last section checks that.
+      </p>
 
-    <form id="controls" class="controls" aria-label="Simulation settings"></form>
+      <section class="panel" aria-labelledby="h-settings">
+        <h2 id="h-settings">Settings</h2>
+        <form id="settings" class="settings" aria-describedby="settings-note"></form>
+        <div class="row actions">
+          <button id="copy" type="button">Copy link to these settings</button>
+          <button id="defaults" type="button" class="quiet">Back to defaults</button>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+        </div>
+        <p id="settings-note" class="note">
+          Changes rerun everything. The settings are kept in the address, so a link reproduces
+          the page. Seeds run from the seed given upwards; each seed is one workload, and the
+          network layout stays the same.
+        </p>
+      </section>
 
-    <main>
-      <section class="panel" aria-labelledby="live-title">
-        <div class="panel-head">
-          <h2 id="live-title">Network</h2>
-          <div class="row">
-            <label>Policy <select id="policy"></select></label>
-            <button type="button" id="play">Pause</button>
-            <button type="button" id="restart">Restart</button>
-            <label>Speed <input id="speed" type="range" min="1" max="40" value="6" /></label>
-          </div>
+      <section class="panel" aria-labelledby="h-network">
+        <h2 id="h-network">The network, one policy at a time</h2>
+        <div class="row">
+          <label class="field" for="policy">
+            Policy
+            <select id="policy"></select>
+          </label>
+          <label class="field" for="speed">
+            <span>Speed <output id="speed-out" for="speed">6</output> ticks a second</span>
+            <input id="speed" type="range" min="1" max="40" value="6" />
+          </label>
+          <button type="button" id="play" class="primary">Pause</button>
+          <button type="button" id="restart">Restart</button>
         </div>
         <p id="policy-summary" class="note"></p>
-        <canvas id="network" width="640" height="640" role="img" aria-label="Users, fog nodes and the cloud, with tasks moving between them"></canvas>
-        <ul class="legend">
-          <li><span class="dot user"></span>user</li>
-          <li><span class="dot fog"></span>fog node (number is tasks held)</li>
-          <li><span class="dot cloud"></span>cloud (busy servers + waiting)</li>
-          <li><span class="dot urgent"></span>urgent task (priority 7 to 9)</li>
-          <li><span class="dot routine"></span>other task</li>
-        </ul>
-        <dl id="live" class="stats"></dl>
+        <div class="network-wrap">
+          <canvas
+            id="network"
+            role="img"
+            aria-label="Users, fog nodes and the cloud, with tasks moving between them. The figures beside it give the running totals."
+          ></canvas>
+          <div>
+            <dl id="live" class="stats"></dl>
+            <ul class="legend stacked">
+              <li><span class="dot" style="color: var(--canvas-muted)"></span>user</li>
+              <li><span class="dot big" style="color: var(--canvas-accent)"></span>fog node: tasks held</li>
+              <li><span class="dot big" style="color: var(--canvas-series-3)"></span>cloud: busy servers + waiting</li>
+              <li><span class="dot" style="color: var(--canvas-change)"></span>urgent task (priority 7 to 9)</li>
+              <li><span class="dot" style="color: var(--canvas-ink)"></span>other task</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
-      <section class="panel" aria-labelledby="compare-title">
-        <div class="panel-head">
-          <h2 id="compare-title">Comparison</h2>
-          <span id="workload-note" class="note"></span>
-        </div>
+      <section class="panel" aria-labelledby="h-compare">
+        <h2 id="h-compare">Six policies on the same tasks</h2>
+        <p id="workload-note" class="note"></p>
+        <ul class="legend" id="policy-legend"></ul>
         <div class="charts">
           <figure id="chart-mean"></figure>
+          <figure id="chart-weighted"></figure>
           <figure id="chart-urgent"></figure>
-          <figure id="chart-cost"></figure>
+          <figure id="chart-tail"></figure>
           <figure id="chart-late"></figure>
+          <figure id="chart-cost"></figure>
         </div>
+        <p class="note">
+          Bars are means over seeds; the whiskers are 95% confidence intervals. Every policy ran
+          on the same tasks, so differences are tighter than overlapping whiskers suggest: the
+          table gives each difference from first come, first served with its own interval.
+        </p>
+        <div class="scroll-x">
+          <table id="results"></table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-priority">
+        <h2 id="h-priority">Who waits: response time by priority</h2>
         <figure id="chart-priority" class="wide"></figure>
-        <div class="table-wrap"><table id="results"></table></div>
+        <ul class="legend" id="priority-legend"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="h-theory">
+        <h2 id="h-theory">Against queueing theory: one queue</h2>
+        <p class="note">
+          Take the network away except for one fog node that keeps every task: a single server,
+          50 users, work of 1 to 9 ticks. Each policy here is only its order; nobody is sent
+          away. For first come, first served the mean wait on this queue has an exact formula
+          (the discrete-time form of the Pollaczek-Khinchine formula). The dashed line is that
+          formula; the dots are the simulation with 95% intervals.
+        </p>
+        <div class="grid-2">
+          <div>
+            <figure id="chart-formula"></figure>
+            <ul class="legend" id="formula-legend"></ul>
+          </div>
+          <div>
+            <figure id="chart-starve"></figure>
+            <ul class="legend" id="starve-legend"></ul>
+          </div>
+        </div>
+        <p id="conservation" class="note"></p>
+        <details>
+          <summary>The numbers as a table</summary>
+          <div class="scroll-x"><table id="theory-table"></table></div>
+        </details>
       </section>
     </main>
-    <div id="tooltip" class="tooltip" hidden></div>
-    <script type="module" src="/src/web/main.ts"></script>
+    <footer class="site-footer">
+      A model, not a network: ticks, made-up prices and an invented workload. The comparisons
+      hold for this model; the shapes are the ones queueing theory predicts.
+    </footer>
+    <div id="tooltip" class="tip" hidden></div>
   </body>
 </html>

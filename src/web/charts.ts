@@ -1,4 +1,8 @@
-/** Small SVG charts drawn by hand: horizontal bars and a multi-series line chart. */
+/**
+ * Small SVG charts drawn by hand: horizontal bars with confidence intervals and a line chart
+ * with optional interval bands. Drawn at the width of their container in CSS pixels, so text
+ * keeps its size on a phone. Colours are CSS variables, so a theme change needs no redraw.
+ */
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -11,21 +15,32 @@ function el(name: string, attrs: Record<string, string | number>, text?: string)
 
 const tooltip = (): HTMLElement => document.getElementById("tooltip")!;
 
-function showTooltip(event: MouseEvent, html: string): void {
+function showTooltip(x: number, y: number, lines: [string, string | null][]): void {
   const tip = tooltip();
-  tip.innerHTML = html;
+  tip.replaceChildren(
+    ...lines.map(([text, colour]) => {
+      const row = document.createElement("div");
+      if (colour) {
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.color = colour;
+        row.append(swatch);
+      }
+      row.append(text);
+      return row;
+    }),
+  );
   tip.hidden = false;
   const box = tip.getBoundingClientRect();
-  const x = Math.min(event.clientX + 12, window.innerWidth - box.width - 8);
-  tip.style.left = `${x}px`;
-  tip.style.top = `${event.clientY + 12}px`;
+  tip.style.left = `${Math.max(8, Math.min(x + 14, window.innerWidth - box.width - 8))}px`;
+  tip.style.top = `${Math.min(y + 14, window.innerHeight - box.height - 8)}px`;
 }
 
-function hideTooltip(): void {
+export function hideTooltip(): void {
   tooltip().hidden = true;
 }
 
-/** Round a maximum up to a tidy axis end and give tick values. */
+/** Round a maximum up to a tidy axis end and give tick values from zero. */
 export function niceTicks(max: number, count = 4): number[] {
   if (!(max > 0)) return [0, 1];
   const rough = max / count;
@@ -36,181 +51,256 @@ export function niceTicks(max: number, count = 4): number[] {
   return ticks;
 }
 
-function caption(figure: HTMLElement, title: string, subtitle: string): void {
+function frame(figure: HTMLElement, title: string, subtitle: string): number {
   const cap = document.createElement("figcaption");
   cap.textContent = title;
   const small = document.createElement("small");
   small.textContent = subtitle;
   cap.append(small);
   figure.replaceChildren(cap);
+  return Math.max(260, Math.round(figure.clientWidth || 320));
 }
 
-export interface Bar {
+export interface BarRow {
   label: string;
-  value: number;
-  color: string;
+  colour: string;
+  mean: number;
+  /** Half-width of the 95% interval. */
+  half: number;
 }
 
 export function barChart(
   figure: HTMLElement,
   title: string,
   subtitle: string,
-  bars: Bar[],
+  rows: BarRow[],
   format: (value: number) => string,
 ): void {
-  caption(figure, title, subtitle);
-  const width = 320;
-  const rowHeight = 26;
-  const left = 0;
-  const right = 56;
-  const top = 4;
-  const height = top + bars.length * rowHeight + 4;
-  const ticks = niceTicks(Math.max(...bars.map((b) => b.value || 0)));
+  const width = frame(figure, title, subtitle);
+  const rowHeight = 34;
+  const top = 2;
+  const axis = 18;
+  const right = 12;
+  const height = top + rows.length * rowHeight + axis;
+  const highest = Math.max(...rows.map((r) => r.mean + (Number.isFinite(r.half) ? r.half : 0)));
+  const ticks = niceTicks(Number.isFinite(highest) ? highest : 1);
   const end = ticks.at(-1)!;
-  const scale = (value: number) => left + (value / end) * (width - left - right);
-  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": title });
-  svg.append(el("line", { class: "axis", x1: left, x2: left, y1: top, y2: height - 4 }));
-  bars.forEach((bar, i) => {
-    const y = top + i * rowHeight;
-    const w = Number.isFinite(bar.value) ? Math.max(scale(bar.value) - left, 1) : 0;
-    const group = el("g", {});
-    group.append(
-      el("rect", { x: left, y, width: width, height: rowHeight, fill: "transparent" }),
-      el("rect", { x: left, y: y + 12, width: w, height: 10, rx: 3, fill: bar.color }),
-      el("text", { x: left + 2, y: y + 9 }, bar.label),
-      el("text", { class: "value", x: left + w + 6, y: y + 21 }, format(bar.value)),
-    );
-    group.addEventListener("mousemove", (event) =>
-      showTooltip(
-        event as MouseEvent,
-        `<strong>${bar.label}</strong>${title}: ${format(bar.value)}`,
+  const x = (value: number) => (Math.max(0, value) / end) * (width - right);
+  const svg = el("svg", {
+    class: "chart",
+    width,
+    height,
+    viewBox: `0 0 ${width} ${height}`,
+    role: "img",
+    "aria-label": `${title}, ${subtitle}. ${rows.map((r) => `${r.label} ${format(r.mean)}`).join("; ")}.`,
+  });
+  const base = height - axis;
+  for (const tick of ticks) {
+    svg.append(
+      el("line", { class: "grid", x1: x(tick), x2: x(tick), y1: top, y2: base }),
+      el(
+        "text",
+        {
+          class: "tick",
+          x: Math.min(x(tick), width - 4),
+          y: height - 4,
+          "text-anchor": tick === 0 ? "start" : "end",
+        },
+        format(tick),
       ),
     );
-    group.addEventListener("mouseleave", hideTooltip);
+  }
+  rows.forEach((row, i) => {
+    const y = top + i * rowHeight;
+    const group = el("g", {});
+    const w = Number.isFinite(row.mean) ? Math.max(x(row.mean), 4) : 0;
+    const lo = x(row.mean - row.half);
+    const hi = x(row.mean + row.half);
+    const value = `${format(row.mean)}${Number.isFinite(row.half) ? ` ± ${format(row.half)}` : ""}`;
+    group.append(
+      el("rect", { x: 0, y, width, height: rowHeight, fill: "transparent" }),
+      el("text", { class: "label", x: 0, y: y + 12 }, row.label),
+      el("text", { class: "value", x: width - right, y: y + 12, "text-anchor": "end" }, value),
+      el("path", {
+        d: `M0 ${y + 17}h${w - 3}a3 3 0 0 1 3 3v4a3 3 0 0 1 -3 3h${-(w - 3)}z`,
+        style: `fill: ${row.colour}`,
+      }),
+    );
+    if (Number.isFinite(row.half) && hi - lo >= 1) {
+      group.append(
+        el("path", {
+          class: "whisker",
+          d: `M${lo} ${y + 22}H${hi}M${lo} ${y + 18}v8M${hi} ${y + 18}v8`,
+        }),
+      );
+    }
+    group.addEventListener("pointermove", (event) =>
+      showTooltip((event as PointerEvent).clientX, (event as PointerEvent).clientY, [
+        [row.label, row.colour],
+        [`${title}: ${value}`, null],
+      ]),
+    );
+    group.addEventListener("pointerleave", hideTooltip);
     svg.append(group);
   });
+  svg.append(el("line", { class: "axis", x1: 0, x2: 0, y1: top, y2: base }));
   figure.append(svg);
 }
 
-export interface Series {
+export interface LineSeries {
   label: string;
-  color: string;
+  colour: string;
   values: number[];
+  /** Half-widths of 95% intervals, drawn as a band. */
+  half?: number[];
+  dashed?: boolean;
 }
 
-export function lineChart(
-  figure: HTMLElement,
-  title: string,
-  subtitle: string,
-  xLabels: string[],
-  series: Series[],
-  format: (value: number) => string,
-): void {
-  caption(figure, title, subtitle);
+export interface LineOptions {
+  title: string;
+  subtitle: string;
+  x: number[];
+  xFormat: (value: number) => string;
+  yFormat: (value: number) => string;
+  xTitle: string;
+  yTitle: string;
+  series: LineSeries[];
+  /** Where the legend goes; it is always drawn for two series or more. */
+  legend: HTMLElement;
+}
 
-  const legend = document.createElement("ul");
-  legend.className = "legend";
-  for (const s of series) {
-    const item = document.createElement("li");
-    const swatch = document.createElement("span");
-    swatch.className = "swatch";
-    swatch.style.background = s.color;
-    item.append(swatch, s.label);
-    legend.append(item);
-  }
-  figure.append(legend);
-
-  const width = 640;
-  const height = 240;
-  const m = { left: 40, right: 16, top: 8, bottom: 36 };
-  const all = series.flatMap((s) => s.values).filter(Number.isFinite);
-  const ticks = niceTicks(Math.max(...all, 0));
+export function lineChart(figure: HTMLElement, o: LineOptions): void {
+  const width = frame(figure, o.title, o.subtitle);
+  const height = 260;
+  const m = { left: 44, right: 14, top: 26, bottom: 40 };
+  const all = o.series.flatMap((s) => s.values.map((v, i) => v + (s.half?.[i] ?? 0)));
+  const ticks = niceTicks(Math.max(...all.filter(Number.isFinite), 0));
   const end = ticks.at(-1)!;
-  const x = (i: number) => m.left + (i / (xLabels.length - 1)) * (width - m.left - m.right);
-  const y = (v: number) => height - m.bottom - (v / end) * (height - m.top - m.bottom);
-  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": title });
-
+  const x0 = o.x[0]!;
+  const x1 = o.x.at(-1)!;
+  const sx = (v: number) => m.left + ((v - x0) / (x1 - x0 || 1)) * (width - m.left - m.right);
+  const sy = (v: number) => height - m.bottom - (v / end) * (height - m.top - m.bottom);
+  const svg = el("svg", {
+    class: "chart",
+    width,
+    height,
+    viewBox: `0 0 ${width} ${height}`,
+    role: "img",
+    "aria-label": `${o.title}, ${o.subtitle}. The table below gives the values.`,
+  });
   for (const tick of ticks) {
     svg.append(
-      el("line", { class: "grid", x1: m.left, x2: width - m.right, y1: y(tick), y2: y(tick) }),
-      el("text", { x: m.left - 6, y: y(tick) + 4, "text-anchor": "end" }, String(tick)),
+      el("line", { class: "grid", x1: m.left, x2: width - m.right, y1: sy(tick), y2: sy(tick) }),
+      el(
+        "text",
+        { class: "tick", x: m.left - 6, y: sy(tick) + 4, "text-anchor": "end" },
+        o.yFormat(tick),
+      ),
     );
   }
-  xLabels.forEach((label, i) => {
-    svg.append(el("text", { x: x(i), y: height - m.bottom + 16, "text-anchor": "middle" }, label));
+  const every = Math.ceil(o.x.length / Math.max(2, Math.floor((width - m.left) / 48)));
+  o.x.forEach((v, i) => {
+    if (i % every !== 0 && i !== o.x.length - 1) return;
+    svg.append(
+      el(
+        "text",
+        { class: "tick", x: sx(v), y: height - m.bottom + 16, "text-anchor": "middle" },
+        o.xFormat(v),
+      ),
+    );
   });
   svg.append(
+    el("line", { class: "axis", x1: m.left, x2: width - m.right, y1: sy(0), y2: sy(0) }),
     el(
       "text",
-      { x: (m.left + width - m.right) / 2, y: height - 4, "text-anchor": "middle" },
-      "task priority",
+      { class: "tick", x: (m.left + width - m.right) / 2, y: height - 6, "text-anchor": "middle" },
+      o.xTitle,
     ),
+    el("text", { class: "tick", x: 0, y: 12 }, o.yTitle),
   );
-
-  for (const s of series) {
+  for (const s of o.series) {
     const points = s.values
-      .map((v, i) => (Number.isFinite(v) ? `${x(i)},${y(v)}` : null))
-      .filter((p) => p !== null);
-    svg.append(
-      el("polyline", {
-        points: points.join(" "),
-        fill: "none",
-        stroke: s.color,
-        "stroke-width": 2,
-        "stroke-linejoin": "round",
-        "stroke-linecap": "round",
-      }),
-    );
-    s.values.forEach((v, i) => {
-      if (!Number.isFinite(v)) return;
+      .map((v, i) => [sx(o.x[i]!), v] as const)
+      .filter(([, v]) => Number.isFinite(v));
+    if (s.half) {
+      const upper = s.values.map((v, i) => `${sx(o.x[i]!)},${sy(v + (s.half![i] || 0))}`);
+      const lower = s.values.map(
+        (v, i) => `${sx(o.x[i]!)},${sy(Math.max(0, v - (s.half![i] || 0)))}`,
+      );
       svg.append(
-        el("circle", {
-          cx: x(i),
-          cy: y(v),
-          r: 4,
-          fill: s.color,
-          stroke: "var(--surface)",
-          "stroke-width": 2,
+        el("polygon", {
+          class: "band",
+          points: [...upper, ...lower.reverse()].join(" "),
+          style: `fill: ${s.colour}`,
         }),
       );
-    });
+    }
+    svg.append(
+      el("polyline", {
+        class: s.dashed ? "series dashed" : "series",
+        points: points.map(([px, v]) => `${px.toFixed(1)},${sy(v).toFixed(1)}`).join(" "),
+        style: `stroke: ${s.colour}`,
+      }),
+    );
+    if (!s.dashed) {
+      for (const [px, v] of points) {
+        svg.append(
+          el("circle", { class: "dot", cx: px, cy: sy(v), r: 3.5, style: `fill: ${s.colour}` }),
+        );
+      }
+    }
   }
 
-  // Hover layer: a crosshair that snaps to the nearest priority and lists every series.
-  const cross = el("line", {
-    class: "axis",
+  // Hover: a crosshair at the nearest x, with every series' value.
+  const cursor = el("line", {
+    class: "cursor",
     y1: m.top,
     y2: height - m.bottom,
     visibility: "hidden",
   });
   const hit = el("rect", {
-    x: m.left - 10,
+    x: m.left,
     y: m.top,
-    width: width - m.left - m.right + 20,
+    width: width - m.left - m.right,
     height: height - m.top - m.bottom,
     fill: "transparent",
   });
-  hit.addEventListener("mousemove", (event) => {
-    const mouse = event as MouseEvent;
+  svg.append(cursor, hit);
+  hit.addEventListener("pointermove", (event) => {
+    const e = event as PointerEvent;
     const box = svg.getBoundingClientRect();
-    const px = ((mouse.clientX - box.left) / box.width) * width;
-    const step = (width - m.left - m.right) / (xLabels.length - 1);
-    const i = Math.min(xLabels.length - 1, Math.max(0, Math.round((px - m.left) / step)));
-    cross.setAttribute("x1", String(x(i)));
-    cross.setAttribute("x2", String(x(i)));
-    cross.setAttribute("visibility", "visible");
-    const rows = series
-      .map(
-        (s) =>
-          `<div><span class="swatch" style="background:${s.color}"></span>${s.label}: ${format(s.values[i]!)}</div>`,
-      )
-      .join("");
-    showTooltip(mouse, `<strong>Priority ${xLabels[i]}</strong>${rows}`);
+    const px = e.clientX - box.left;
+    let best = 0;
+    o.x.forEach((v, i) => {
+      if (Math.abs(sx(v) - px) < Math.abs(sx(o.x[best]!) - px)) best = i;
+    });
+    cursor.setAttribute("x1", String(sx(o.x[best]!)));
+    cursor.setAttribute("x2", String(sx(o.x[best]!)));
+    cursor.setAttribute("visibility", "visible");
+    showTooltip(e.clientX, e.clientY, [
+      [`${o.xTitle}: ${o.xFormat(o.x[best]!)}`, null],
+      ...o.series.map((s): [string, string] => {
+        const half = s.half?.[best];
+        const v = s.values[best]!;
+        const tail = half !== undefined && Number.isFinite(half) ? ` ± ${o.yFormat(half)}` : "";
+        return [`${s.label}: ${Number.isFinite(v) ? o.yFormat(v) : "-"}${tail}`, s.colour];
+      }),
+    ]);
   });
-  hit.addEventListener("mouseleave", () => {
-    cross.setAttribute("visibility", "hidden");
+  hit.addEventListener("pointerleave", () => {
+    cursor.setAttribute("visibility", "hidden");
     hideTooltip();
   });
-  svg.append(cross, hit);
   figure.append(svg);
+
+  o.legend.replaceChildren(
+    ...o.series.map((s) => {
+      const li = document.createElement("li");
+      const swatch = document.createElement("span");
+      swatch.className = s.dashed ? "swatch dashed" : "swatch line";
+      swatch.style.color = s.colour;
+      li.append(swatch, s.label);
+      return li;
+    }),
+  );
 }
