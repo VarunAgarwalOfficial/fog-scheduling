@@ -122,7 +122,8 @@ tasks past their deadline, share run on fog, and cost.
 - Ageing does not change the overall mean: it only reorders who waits.
 - The mix of shortest job and priority sits between the two at the defaults, which agrees with the
   conclusion of the original report. On a busy cloud its urgent tasks wait longer than under
-  either parent rule, because the cloud ignores priority while most tasks end up there.
+  either parent rule: it keeps only a fifth of the tasks on fog (shortest job first keeps a
+  third) and orders the overloaded cloud by size, not urgency.
 
 These numbers describe this model, not a real network.
 
@@ -131,7 +132,8 @@ These numbers describe this model, not a real network.
 `npm run theory` removes everything except one fog node that keeps every task: a single server
 with 50 users, each sending a task on a tick with a small probability, work 1 to 9 ticks. For
 first come, first served this queue has an exact mean wait (the discrete-time form of the
-Pollaczek-Khinchine formula; the derivation is in `src/core/theory.ts`). With 20 seeds:
+Pollaczek-Khinchine formula; the derivation is in `src/core/theory.ts`).
+`npm run theory -- --seeds 20`:
 
 | Load | Simulated    | Formula | Inside the interval |
 | ---: | -----------: | ------: | ------------------- |
@@ -153,13 +155,10 @@ On the same queue the other textbook results show up as expected:
 
 ### References
 
-- A. Cobham, "Priority assignment in waiting line problems", Journal of the Operations Research
-  Society of America 2(1), 70-76, 1954. Mean waits per class under non-preemptive priority.
 - W. E. Smith, "Various optimizers for single-stage production", Naval Research Logistics
   Quarterly 3(1-2), 59-66, 1956. The ratio rule behind weighted shortest job.
 - L. Kleinrock, "A conservation law for a wide class of queueing disciplines", Naval Research
-  Logistics Quarterly 12(2), 181-192, 1965. Treated at length in his Queueing Systems,
-  Volume 2: Computer Applications (Wiley, 1976).
+  Logistics Quarterly 12(2), 181-192, 1965.
 
 ## Run
 

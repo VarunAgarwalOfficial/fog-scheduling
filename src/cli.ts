@@ -26,7 +26,7 @@ const LOADS = [0.3, 0.5, 0.7, 0.8, 0.9];
 function usage(): string {
   const lines = [
     "Usage: npm run compare -- [options]",
-    "       npm run theory -- [--seeds N] [--seed N]",
+    "       npm run theory -- [--seeds N] [--seed N] [--ticks N] [--ageing N]",
     "",
     "compare  runs every scheduling policy on the same generated workloads, one per seed,",
     "         and prints each measure as a mean with its 95% confidence interval.",
@@ -206,6 +206,7 @@ function main(): void {
     const seeds = seedsFor(config, count);
     const base: Partial<Config> = {};
     if (typeof values.ticks === "string") base.ticks = config.ticks;
+    if (typeof values.ageing === "string") base.ageing = config.ageing;
     const points = sweepLoads(LOADS, seeds, base);
     if (values.json) console.log(JSON.stringify({ seeds, points }, null, 2));
     else console.log(theoryReport(points, seeds, base));
