@@ -28,21 +28,21 @@ Each tick, in order:
 3. Each fog node works on one task, each cloud server works on one task. A started task runs to
    completion (no preemption). Free nodes and servers pick the task the policy ranks first.
 
-| | Fog node | Cloud |
-| --- | --- | --- |
-| Speed | 3 work units per tick | 4 work units per tick, per server |
-| Size | holds 2 tasks | 14 servers ("elastic up to a point") |
-| Delay | none | 3 ticks |
-| Price | 2 per busy tick (reserved hardware) | 1 per work unit (pay per use) |
+|       | Fog node                            | Cloud                                |
+| ----- | ----------------------------------- | ------------------------------------ |
+| Speed | 3 work units per tick               | 4 work units per tick, per server    |
+| Size  | holds 2 tasks                       | 14 servers ("elastic up to a point") |
+| Delay | none                                | 3 ticks                              |
+| Price | 2 per busy tick (reserved hardware) | 1 per work unit (pay per use)        |
 
 These are the defaults; all of them can be changed.
 
-| Policy | Admitted to fog | Fog order | Sent away when full | Cloud order |
-| --- | --- | --- | --- | --- |
-| First come, first served | all | oldest first | newest | oldest first |
-| Priority | priority 5 and up | most urgent first | least urgent | most urgent first |
-| Shortest job first | all | shortest first | longest | shortest first |
-| SJF + priority | priority 5 and up | most urgent, then shortest | least urgent | shortest first |
+| Policy                   | Admitted to fog   | Fog order                  | Sent away when full | Cloud order       |
+| ------------------------ | ----------------- | -------------------------- | ------------------- | ----------------- |
+| First come, first served | all               | oldest first               | newest              | oldest first      |
+| Priority                 | priority 5 and up | most urgent first          | least urgent        | most urgent first |
+| Shortest job first       | all               | shortest first             | longest             | shortest first    |
+| SJF + priority           | priority 5 and up | most urgent, then shortest | least urgent        | shortest first    |
 
 The workload is generated once from a seed and every policy runs on that same list of tasks, so a
 difference between two rows is caused by the policy and not by chance.
@@ -55,16 +55,16 @@ deadline, share of tasks run on fog, and cost.
 
 With the defaults (50 users, 5 fog nodes, 19,871 tasks, seed 2):
 
-| Policy | Mean | 95th pct | Urgent | Urgent late | Total cost |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| First come, first served | 5.04 | 7 | 5.03 | 3.3% | 94,856 |
-| Priority | 5.23 | 10 | 3.98 | 1.4% | 95,167 |
-| Shortest job first | 4.37 | 8 | 4.34 | 3.4% | 98,868 |
-| SJF + priority | 4.92 | 9 | 4.19 | 3.7% | 95,570 |
+| Policy                   | Mean | 95th pct | Urgent | Urgent late | Total cost |
+| ------------------------ | ---: | -------: | -----: | ----------: | ---------: |
+| First come, first served | 5.04 |        7 |   5.03 |        3.3% |     94,856 |
+| Priority                 | 5.23 |       10 |   3.98 |        1.4% |     95,167 |
+| Shortest job first       | 4.37 |        8 |   4.34 |        3.4% |     98,868 |
+| SJF + priority           | 4.92 |        9 |   4.19 |        3.7% |     95,570 |
 
 - Priority answers emergencies fastest and pays for it with the worst mean: the least important
   tasks wait behind everything else. Take one cloud server away (`--cloud-servers 13`) and
-  priority 1 tasks wait hundreds of ticks while priority 9 tasks do not notice.
+  priority 1 tasks wait well over a hundred ticks while priority 9 tasks do not notice.
 - Shortest job first has the best mean, as theory says, but is blind to urgency and costs the most,
   because short jobs fill the fog nodes, which are charged per tick, and long jobs go to the cloud,
   which is charged per unit of work.
