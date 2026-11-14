@@ -77,8 +77,8 @@ test("queues follow the policy and a started task is not interrupted", () => {
   assert.ok(hybrid.cloudOrder(short, task({ id: 2, work: 9, priority: 9 })) < 0);
 });
 
-for (const policy of policies) {
-  test(`${policy.id}: every task is answered once, within capacity and physical limits`, () => {
+test("every task is answered once, within capacity and physical limits", () => {
+  for (const policy of policies) {
     const config = { ...defaultConfig, ticks: 300 };
     const workload = generateWorkload(config, buildTopology(config));
     const sim = createSimulation(config, policy, workload);
@@ -100,8 +100,8 @@ for (const policy of policies) {
       }
     }
     assert.equal(sim.cloudCost, cloudWork * config.cloudCostPerUnit);
-  });
-}
+  }
+});
 
 test("on the same workload the policies do what they are for", () => {
   const workload = generateWorkload(defaultConfig, buildTopology(defaultConfig));

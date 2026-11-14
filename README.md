@@ -87,7 +87,7 @@ npm run dev                               # interactive view at http://localhost
 
 The view animates one policy on the network and shows the comparison of all four as charts and a
 table. Changing a setting reruns everything. `npm run build` writes a static site to `dist/`.
-`PORT` sets the port of the dev server (see `.env.example`).
+To use another port, run `PORT=4000 npm run dev` or copy `.env.example` to `.env`.
 
 ## Test
 
