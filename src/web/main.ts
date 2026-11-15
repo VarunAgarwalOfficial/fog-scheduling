@@ -3,12 +3,12 @@ import "./style.css";
 import type { Interval, Measure } from "../core/experiment.ts";
 import { type Config, defaultConfig, type Task, type Topology } from "../core/model.ts";
 import { getPolicy, policies } from "../core/policies.ts";
-import { createSimulation, type Simulation } from "../core/sim.ts";
+import { createSimulation, type Simulation, type Snapshot } from "../core/sim.ts";
 import type { LoadPoint } from "../core/theory.ts";
 import { buildTopology, generateWorkload } from "../core/workload.ts";
 import { barChart, hideTooltip, lineChart } from "./charts.ts";
 import { NetworkView } from "./network.ts";
-import { initTheme, onThemeChange, palette } from "./shared/theme.js";
+import { palette } from "./shared/theme.js";
 import type { Job, PlainExperiment, Reply } from "./worker.ts";
 
 interface Field {
@@ -37,7 +37,9 @@ const fields: Field[] = [
 /** Colour of a policy: fixed by its place in the list, never by rank. */
 const colourOf = (id: string): string =>
   `var(--canvas-series-${policies.findIndex((p) => p.id === id) + 1})`;
-const labelOf = (id: string): string => getPolicy(id).label;
+/** Names as the page shows them: abbreviations spelled out. */
+const plainLabels: Record<string, string> = { hybrid: "Shortest job first + priority" };
+const labelOf = (id: string): string => plainLabels[id] ?? getPolicy(id).label;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const fmt = (value: number, digits = 2): string =>
@@ -56,10 +58,13 @@ let policyId = "priority";
 let topology: Topology = buildTopology(config);
 let workload: Task[] = generateWorkload(config, topology);
 let sim: Simulation;
-let playing = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Nothing moves until the reader presses Play. */
+let playing = false;
 let clock = 0;
 let stepsRun = 0;
 let lastFrame = 0;
+let looping = false;
+let last: Snapshot | null = null;
 let experiment: PlainExperiment | null = null;
 let loads: LoadPoint[] | null = null;
 /** The settings the theory sweep was run for; it only depends on these. */
@@ -138,7 +143,7 @@ function buildSettings(): void {
   form.addEventListener("submit", (event) => event.preventDefault());
 
   const select = $<HTMLSelectElement>("policy");
-  for (const policy of policies) select.add(new Option(policy.label, policy.id));
+  for (const policy of policies) select.add(new Option(labelOf(policy.id), policy.id));
   select.addEventListener("change", () => {
     policyId = select.value;
     writeHash();
@@ -146,8 +151,19 @@ function buildSettings(): void {
   });
   $("restart").addEventListener("click", restart);
   $("play").addEventListener("click", () => {
+    if (sim.done) restart();
     playing = !playing;
     showPlaying();
+  });
+  $("step").addEventListener("click", () => {
+    playing = false;
+    showPlaying();
+    if (sim.done) return;
+    stepOnce();
+    // Halfway along this tick, so the tasks it sent are seen on their links.
+    clock = stepsRun - 0.5;
+    renderLive();
+    view.draw(clock);
   });
   const speed = $<HTMLInputElement>("speed");
   speed.addEventListener("input", () => {
@@ -156,9 +172,10 @@ function buildSettings(): void {
   $("copy").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);
-      say("Link copied.");
+      $("copy-status").textContent = "Link copied.";
     } catch {
-      say("Copy the address from the address bar: it holds these settings.");
+      $("copy-status").textContent =
+        "Copy the address from the address bar: it holds these settings.";
     }
   });
   $("defaults").addEventListener("click", () => {
@@ -187,7 +204,14 @@ function fillSettings(): void {
 }
 
 function showPlaying(): void {
-  $("play").textContent = playing ? "Pause" : "Play";
+  $("play").textContent = playing ? "Pause" : sim?.done ? "Play again" : "Play";
+  if (playing && !looping) {
+    looping = true;
+    requestAnimationFrame((now) => {
+      lastFrame = now;
+      frame(now);
+    });
+  }
 }
 
 function say(text: string): void {
@@ -263,13 +287,50 @@ function rebuild(): void {
 
 function restart(): void {
   const policy = getPolicy(policyId);
-  $("policy-summary").textContent = policy.summary;
+  $("policy-summary").textContent = `${labelOf(policy.id)}: ${policy.summary}`;
   sim = createSimulation(config, policy, workload);
   view.reset(topology, config);
   clock = 0;
   stepsRun = 0;
+  last = null;
   renderLive();
   view.draw(0);
+}
+
+function stepOnce(): void {
+  last = sim.step();
+  view.record(last);
+  stepsRun++;
+}
+
+/** One or two sentences on the last tick: what arrived, what went to the cloud, what finished. */
+function describe(): string {
+  const users = topology.users.length;
+  const fogs = topology.fogs.length;
+  if (!last) {
+    return (
+      `Nothing has run yet. The ${users} small grey dots are users, each linked to the nearest ` +
+      `of ${fogs} fog nodes (the numbered circles, showing how many tasks each holds). The large ` +
+      "circle at the top is the cloud, showing busy servers + tasks waiting. Press Play to start."
+    );
+  }
+  if (sim.done) {
+    return `Finished after ${stepsRun.toLocaleString("en")} ticks: every task has been answered. Press Restart or pick another policy to compare.`;
+  }
+  const arrived = last.arrivals.length;
+  const urgent = last.arrivals.filter((t) => t.priority >= 7).length;
+  const sent = last.offloads.length;
+  const done = last.completed.length;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const parts = [
+    `Tick ${stepsRun.toLocaleString("en")}: ${plural(arrived, "new task")} arrived` +
+      (urgent ? ` (${urgent} urgent)` : ""),
+    sent
+      ? `${sent} passed on to the cloud because the policy did not keep them at the fog node`
+      : "",
+    `${done} answered this tick`,
+  ].filter(Boolean);
+  return `${parts.join(", ")}. The cloud has ${last.cloudBusy} busy servers and ${last.cloudWaiting} tasks waiting.`;
 }
 
 function renderLive(): void {
@@ -277,16 +338,18 @@ function renderLive(): void {
   const mean = outcomes.reduce((sum, o) => sum + o.response, 0) / outcomes.length;
   const urgent = outcomes.filter((o) => o.task.priority >= 7);
   const urgentMean = urgent.reduce((sum, o) => sum + o.response, 0) / urgent.length;
+  const ticks = (value: number) => (Number.isFinite(value) ? `${fmt(value)} ticks` : "none yet");
   const stats: [string, string][] = [
-    ["Tick", String(stepsRun)],
+    ["Ticks run", stepsRun.toLocaleString("en")],
     [
       "Tasks answered",
       `${outcomes.length.toLocaleString("en")} of ${workload.length.toLocaleString("en")}`,
     ],
-    ["Mean response", `${fmt(mean)} ticks`],
-    ["Urgent response", `${fmt(urgentMean)} ticks`],
-    ["Cost so far", whole(sim.fogCost + sim.cloudCost)],
+    ["Average time to answer", ticks(mean)],
+    ["Average for urgent tasks", ticks(urgentMean)],
+    ["Cost so far (made-up units)", whole(sim.fogCost + sim.cloudCost)],
   ];
+  $("happened").textContent = describe();
   $("live").replaceChildren(
     ...stats.map(([name, value]) => {
       const wrap = document.createElement("div");
@@ -300,6 +363,7 @@ function renderLive(): void {
   );
 }
 
+/** Runs only while playing: when paused or finished, nothing is redrawn. */
 function frame(now: number): void {
   const dt = Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
@@ -307,14 +371,19 @@ function frame(now: number): void {
     clock += dt * Number($<HTMLInputElement>("speed").value);
     let ran = false;
     while (stepsRun < clock && !sim.done) {
-      view.record(sim.step());
-      stepsRun++;
+      stepOnce();
       ran = true;
     }
     if (ran) renderLive();
   }
-  if (playing) view.draw(clock);
-  requestAnimationFrame(frame);
+  view.draw(clock);
+  if (playing && sim.done) {
+    playing = false;
+    renderLive();
+    showPlaying();
+  }
+  if (playing) requestAnimationFrame(frame);
+  else looping = false;
 }
 
 // ---------------------------------------------------------------- comparison
@@ -381,7 +450,7 @@ function renderLegend(target: HTMLElement): void {
       const swatch = document.createElement("span");
       swatch.className = "swatch";
       swatch.style.color = colourOf(p.id);
-      li.append(swatch, p.label);
+      li.append(swatch, labelOf(p.id));
       return li;
     }),
   );
@@ -545,7 +614,7 @@ function renderTheory(): void {
   for (const text of [
     "Load",
     "Formula",
-    ...policies.map((p) => `${p.label}: mean wait`),
+    ...policies.map((p) => `${labelOf(p.id)}: mean wait`),
     "Priority: p1 tail",
     "Ageing: p1 tail",
   ]) {
@@ -577,8 +646,8 @@ function redrawAll(): void {
   renderTheory();
 }
 
-initTheme($<HTMLButtonElement>("theme"));
-onThemeChange(() => {
+// No theme button: the page follows the system colour scheme, as the host page does.
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   view.setColours(palette());
   view.draw(clock);
 });
@@ -588,6 +657,14 @@ addEventListener("resize", () => {
   resizeTimer = window.setTimeout(redrawAll, 150);
 });
 addEventListener("scroll", hideTooltip, { passive: true });
+// Charts are sized to their box, which is empty while a panel is closed: size them on opening.
+for (const panel of document.querySelectorAll<HTMLDetailsElement>("details.panel")) {
+  panel.addEventListener("toggle", () => {
+    if (!panel.open) return;
+    renderComparison();
+    renderTheory();
+  });
+}
 renderLegend($("policy-legend"));
 buildSettings();
 readHash();
@@ -595,7 +672,5 @@ fillSettings();
 showPlaying();
 view.setColours(palette());
 rebuild();
-requestAnimationFrame((now) => {
-  lastFrame = now;
-  frame(now);
-});
+// The canvas labels use the page font; draw once more when it has loaded.
+document.fonts?.ready.then(() => view.draw(clock));

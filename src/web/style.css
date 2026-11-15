@@ -19,35 +19,18 @@
   color: var(--muted);
 }
 
-.running .status::before {
-  content: "";
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-right: var(--space-2);
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1s ease-in-out infinite alternate;
+.happened {
+  margin: var(--space-3) 0;
+  max-width: 44rem;
 }
 
-@keyframes pulse {
-  from {
-    opacity: 0.25;
-  }
-}
-
-.network-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 36rem) minmax(12rem, 1fr);
-  gap: var(--space-5);
-  align-items: start;
+.controls {
+  align-items: end;
   margin-top: var(--space-3);
 }
 
-@media (max-width: 48rem) {
-  .network-wrap {
-    grid-template-columns: 1fr;
-  }
+.controls .field {
+  flex: 0 1 20rem;
 }
 
 #network {
@@ -72,12 +55,7 @@
 .stats dd {
   margin: 0;
   font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.legend.stacked {
-  flex-direction: column;
-  margin-top: var(--space-4);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .dot {
@@ -94,7 +72,8 @@
 
 .charts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  /* One chart under another, so the eye moves down only. */
+  grid-template-columns: minmax(0, 40rem);
   gap: var(--space-5);
   margin-top: var(--space-4);
 }
@@ -102,7 +81,6 @@
 .running .charts,
 .running #chart-priority {
   opacity: 0.55;
-  transition: opacity var(--fast) var(--ease);
 }
 
 figure {
@@ -139,7 +117,7 @@ figcaption small {
 
 .chart text.value {
   fill: var(--ink);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .chart .grid {

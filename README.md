@@ -48,14 +48,14 @@ Each tick, in order:
 
 These are the defaults; all of them can be changed.
 
-| Policy                   | Kept at fog       | Order (fog and cloud)                         | Sent away when full |
-| ------------------------ | ----------------- | --------------------------------------------- | ------------------- |
-| First come, first served | all               | oldest first                                  | newest              |
-| Priority                 | priority 5 and up | most urgent first                             | least urgent        |
-| Shortest job first       | all               | shortest first                                | longest             |
-| SJF + priority           | priority 5 and up | fog: most urgent, then shortest; cloud: shortest | least urgent     |
-| Weighted shortest job    | all               | least work per unit of priority first         | most work per priority |
-| Priority with ageing     | priority 5 and up | most urgent first, counting waiting time      | lowest aged priority |
+| Policy                   | Kept at fog       | Order (fog and cloud)                            | Sent away when full    |
+| ------------------------ | ----------------- | ------------------------------------------------ | ---------------------- |
+| First come, first served | all               | oldest first                                     | newest                 |
+| Priority                 | priority 5 and up | most urgent first                                | least urgent           |
+| Shortest job first       | all               | shortest first                                   | longest                |
+| SJF + priority           | priority 5 and up | fog: most urgent, then shortest; cloud: shortest | least urgent           |
+| Weighted shortest job    | all               | least work per unit of priority first            | most work per priority |
+| Priority with ageing     | priority 5 and up | most urgent first, counting waiting time         | lowest aged priority   |
 
 Weighted shortest job is Smith's ratio rule: it orders by work divided by priority, which
 minimises the priority-weighted waiting time on one machine. Priority with ageing gives a waiting
@@ -92,14 +92,14 @@ tasks past their deadline, share run on fog, and cost.
 
 `npm run compare -- --cloud-servers 13`, one cloud server fewer, so the cloud is close to full:
 
-| Policy                   |         Mean |      Urgent |   p1 tail | Mean wait, priority 1 |
-| ------------------------ | -----------: | ----------: | --------: | --------------------: |
+| Policy                   |         Mean |       Urgent |   p1 tail | Mean wait, priority 1 |
+| ------------------------ | -----------: | -----------: | --------: | --------------------: |
 | First come, first served | 11.54 ± 2.63 | 11.53 ± 2.61 |    26 ± 6 |                 11.51 |
-| Priority                 | 23.67 ± 4.41 | 3.99 ± 0.02 |  345 ± 72 |                172.81 |
-| Shortest job first       |  5.73 ± 0.74 | 5.72 ± 0.71 |   38 ± 13 |                  5.69 |
+| Priority                 | 23.67 ± 4.41 |  3.99 ± 0.02 |  345 ± 72 |                172.81 |
+| Shortest job first       |  5.73 ± 0.74 |  5.72 ± 0.71 |   38 ± 13 |                  5.69 |
 | SJF + priority           | 15.07 ± 2.43 | 11.13 ± 1.54 |  202 ± 45 |                 17.16 |
-| Weighted shortest job    |  6.53 ± 1.02 | 3.81 ± 0.02 | 270 ± 136 |                 23.20 |
-| Priority with ageing     | 23.62 ± 4.35 | 4.07 ± 0.15 |  112 ± 12 |                 72.73 |
+| Weighted shortest job    |  6.53 ± 1.02 |  3.81 ± 0.02 | 270 ± 136 |                 23.20 |
+| Priority with ageing     | 23.62 ± 4.35 |  4.07 ± 0.15 |  112 ± 12 |                 72.73 |
 
 - Shortest job first has the lowest mean response, as the theory of non-preemptive scheduling
   says it should, and is blind to urgency. It also costs the most: short jobs fill the fog nodes,
@@ -111,7 +111,7 @@ tasks past their deadline, share run on fog, and cost.
 - Ageing cuts that tail to about a third and keeps urgent tasks close to strict priority. The
   `ageing` setting trades one for the other (same 13-server setup):
 
-  | Ticks per level | p1 tail  | Urgent mean | Urgent late |
+  | Ticks per level |  p1 tail | Urgent mean | Urgent late |
   | --------------: | -------: | ----------: | ----------: |
   |               5 |  70 ± 10 | 8.73 ± 2.18 | 21.0 ± 6.6% |
   |              10 |  85 ± 10 | 5.52 ± 1.27 |  8.5 ± 4.5% |
@@ -135,7 +135,7 @@ first come, first served this queue has an exact mean wait (the discrete-time fo
 Pollaczek-Khinchine formula; the derivation is in `src/core/theory.ts`).
 `npm run theory -- --seeds 20`:
 
-| Load | Simulated    | Formula | Inside the interval |
+| Load |    Simulated | Formula | Inside the interval |
 | ---: | -----------: | ------: | ------------------- |
 | 0.30 |  1.38 ± 0.06 |    1.35 | yes                 |
 | 0.50 |  3.23 ± 0.11 |    3.16 | yes                 |

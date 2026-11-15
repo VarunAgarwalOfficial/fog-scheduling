@@ -18,68 +18,60 @@
     <a class="skip" href="#main">Skip to content</a>
     <header class="site-header">
       <h1 class="site-title">Fog scheduling</h1>
-      <button id="theme" class="quiet" type="button">Theme: auto</button>
     </header>
     <main id="main">
       <p class="lede">
-        Users send tasks to their nearest fog node. A fog node is close but small, so it keeps a
-        few tasks and sends the rest to a larger cloud that takes a few ticks to reach. The
-        scheduling policy decides which tasks stay and what runs first. Every policy runs on the
-        same tasks, over many independent workloads, and the results come with 95% confidence
-        intervals. What it finds is what queueing theory predicts; the last section checks that.
+        Users send tasks to a nearby small computer, a fog node, which keeps a few and passes the
+        rest to a large but distant cloud; a scheduling policy decides which tasks stay and which
+        run first. Press Play to watch the Priority policy handle one workload, one tick (one
+        step of time) after another.
       </p>
-
-      <section class="panel" aria-labelledby="h-settings">
-        <h2 id="h-settings">Settings</h2>
-        <form id="settings" class="settings" aria-describedby="settings-note"></form>
-        <div class="row actions">
-          <button id="copy" type="button">Copy link to these settings</button>
-          <button id="defaults" type="button" class="quiet">Back to defaults</button>
-          <p id="status" class="status" role="status" aria-live="polite"></p>
-        </div>
-        <p id="settings-note" class="note">
-          Changes rerun everything. The settings are kept in the address, so a link reproduces
-          the page. Seeds run from the seed given upwards; each seed is one workload, and the
-          network layout stays the same.
-        </p>
-      </section>
 
       <section class="panel" aria-labelledby="h-network">
         <h2 id="h-network">The network, one policy at a time</h2>
-        <div class="row">
+        <canvas
+          id="network"
+          role="img"
+          aria-label="Users, fog nodes and the cloud, with tasks moving between them."
+        ></canvas>
+        <ul class="legend">
+          <li><span class="dot" style="color: var(--canvas-muted)"></span>user</li>
+          <li>
+            <span class="dot big" style="color: var(--canvas-accent)"></span>fog node: number
+            of tasks it holds
+          </li>
+          <li>
+            <span class="dot big" style="color: var(--canvas-series-3)"></span>cloud: busy
+            servers + tasks waiting
+          </li>
+          <li>
+            <span class="dot" style="color: var(--canvas-change)"></span>urgent task (priority
+            7 to 9)
+          </li>
+          <li><span class="dot" style="color: var(--canvas-ink)"></span>other task</li>
+        </ul>
+        <div class="row controls">
+          <button type="button" id="play" class="primary">Play</button>
+          <button type="button" id="step">Step forward</button>
+          <button type="button" id="restart">Restart</button>
           <label class="field" for="policy">
             Policy
             <select id="policy"></select>
           </label>
-          <label class="field" for="speed">
-            <span>Speed <output id="speed-out" for="speed">6</output> ticks a second</span>
-            <input id="speed" type="range" min="1" max="40" value="6" />
-          </label>
-          <button type="button" id="play" class="primary">Pause</button>
-          <button type="button" id="restart">Restart</button>
         </div>
+        <p id="happened" class="happened" aria-live="polite"></p>
         <p id="policy-summary" class="note"></p>
-        <div class="network-wrap">
-          <canvas
-            id="network"
-            role="img"
-            aria-label="Users, fog nodes and the cloud, with tasks moving between them. The figures beside it give the running totals."
-          ></canvas>
-          <div>
-            <dl id="live" class="stats"></dl>
-            <ul class="legend stacked">
-              <li><span class="dot" style="color: var(--canvas-muted)"></span>user</li>
-              <li><span class="dot big" style="color: var(--canvas-accent)"></span>fog node: tasks held</li>
-              <li><span class="dot big" style="color: var(--canvas-series-3)"></span>cloud: busy servers + waiting</li>
-              <li><span class="dot" style="color: var(--canvas-change)"></span>urgent task (priority 7 to 9)</li>
-              <li><span class="dot" style="color: var(--canvas-ink)"></span>other task</li>
-            </ul>
-          </div>
-        </div>
+        <dl id="live" class="stats"></dl>
       </section>
 
-      <section class="panel" aria-labelledby="h-compare">
-        <h2 id="h-compare">Six policies on the same tasks</h2>
+      <details class="panel">
+        <summary>Six policies on the same tasks: how long each makes tasks wait, and what it costs</summary>
+        <p class="note">
+          Each policy was run in full, without animation, on the same tasks over many workloads
+          (one per seed, a number that fixes the random tasks). Bars are means; the whiskers
+          show the 95% confidence interval, the range the true mean very likely falls in.
+        </p>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
         <p id="workload-note" class="note"></p>
         <ul class="legend" id="policy-legend"></ul>
         <div class="charts">
@@ -90,24 +82,27 @@
           <figure id="chart-late"></figure>
           <figure id="chart-cost"></figure>
         </div>
-        <p class="note">
-          Bars are means over seeds; the whiskers are 95% confidence intervals. Every policy ran
-          on the same tasks, so differences are tighter than overlapping whiskers suggest: the
-          table gives each difference from first come, first served with its own interval.
-        </p>
-        <div class="scroll-x">
-          <table id="results"></table>
-        </div>
-      </section>
+        <details>
+          <summary>The numbers as a table, with each difference from first come, first served</summary>
+          <p class="note">
+            Every policy ran on the same tasks, so differences are tighter than overlapping
+            whiskers suggest: below each row is its difference from first come, first served,
+            seed by seed, with its own interval.
+          </p>
+          <div class="scroll-x">
+            <table id="results"></table>
+          </div>
+        </details>
+      </details>
 
-      <section class="panel" aria-labelledby="h-priority">
-        <h2 id="h-priority">Who waits: response time by priority</h2>
+      <details class="panel">
+        <summary>Who waits: response time by priority</summary>
         <figure id="chart-priority" class="wide"></figure>
         <ul class="legend" id="priority-legend"></ul>
-      </section>
+      </details>
 
-      <section class="panel" aria-labelledby="h-theory">
-        <h2 id="h-theory">Against queueing theory: one queue</h2>
+      <details class="panel">
+        <summary>Against queueing theory: one queue</summary>
         <p class="note">
           Take the network away except for one fog node that keeps every task: a single server,
           50 users, work of 1 to 9 ticks. Each policy here is only its order; nobody is sent
@@ -115,22 +110,35 @@
           (the discrete-time form of the Pollaczek-Khinchine formula). The dashed line is that
           formula; the dots are the simulation with 95% intervals.
         </p>
-        <div class="grid-2">
-          <div>
-            <figure id="chart-formula"></figure>
-            <ul class="legend" id="formula-legend"></ul>
-          </div>
-          <div>
-            <figure id="chart-starve"></figure>
-            <ul class="legend" id="starve-legend"></ul>
-          </div>
-        </div>
+        <figure id="chart-formula"></figure>
+        <ul class="legend" id="formula-legend"></ul>
+        <figure id="chart-starve"></figure>
+        <ul class="legend" id="starve-legend"></ul>
         <p id="conservation" class="note"></p>
         <details>
           <summary>The numbers as a table</summary>
           <div class="scroll-x"><table id="theory-table"></table></div>
         </details>
-      </section>
+      </details>
+
+      <details class="panel">
+        <summary>Settings: network size, workload, seeds and playback speed</summary>
+        <label class="field speed" for="speed">
+          <span>Playback speed: <output id="speed-out" for="speed">6</output> ticks a second</span>
+          <input id="speed" type="range" min="1" max="40" value="6" />
+        </label>
+        <form id="settings" class="settings" aria-describedby="settings-note"></form>
+        <div class="row actions">
+          <button id="copy" type="button">Copy link to these settings</button>
+          <button id="defaults" type="button" class="quiet">Back to defaults</button>
+          <p id="copy-status" class="status" role="status" aria-live="polite"></p>
+        </div>
+        <p id="settings-note" class="note">
+          Changes rerun everything. The settings are kept in the address, so a link reproduces
+          the page. Seeds run from the seed given upwards; each seed is one workload, and the
+          network layout stays the same.
+        </p>
+      </details>
     </main>
     <footer class="site-footer">
       A model, not a network: ticks, made-up prices and an invented workload. The comparisons

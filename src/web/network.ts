@@ -46,9 +46,13 @@ export class NetworkView {
   private fit(): { width: number; height: number } {
     const { canvas } = this;
     const width = canvas.clientWidth || 600;
-    const height = Math.round(width * 1.1);
+    // Tall enough for the network, short enough that it and its controls share one screen.
+    const height = Math.round(Math.min(width * 1.1, Math.max(300, window.innerHeight * 0.55)));
     const ratio = window.devicePixelRatio || 1;
-    if (canvas.width !== Math.round(width * ratio)) {
+    if (
+      canvas.width !== Math.round(width * ratio) ||
+      canvas.height !== Math.round(height * ratio)
+    ) {
       canvas.width = Math.round(width * ratio);
       canvas.height = Math.round(height * ratio);
       canvas.style.height = `${height}px`;
@@ -153,6 +157,25 @@ export class NetworkView {
     });
     const busy = this.last?.cloudBusy ?? 0;
     const waiting = this.last?.cloudWaiting ?? 0;
-    label(cloud, radius(22), c.series[2]!, `${busy}+${waiting}`);
+    const cloudR = radius(22);
+    label(cloud, cloudR, c.series[2]!, `${busy}+${waiting}`);
+
+    // Name the parts where they sit: the cloud, and one fog node and one user as examples.
+    const name = (x: number, y: number, lines: string[], align: CanvasTextAlign) => {
+      ctx.fillStyle = c.ink;
+      ctx.textAlign = align;
+      ctx.textBaseline = "middle";
+      ctx.font = `12px "IBM Plex Sans", system-ui, sans-serif`;
+      lines.forEach((line, i) => {
+        ctx.fillText(line, x, y + (i - (lines.length - 1) / 2) * 15);
+      });
+    };
+    name(cloud.x + cloudR + 8, cloud.y, ["cloud: busy servers", "+ tasks waiting"], "left");
+    const fogs = topology.fogs.map(px);
+    const left = fogs.reduce((a, b) => (b.x < a.x ? b : a));
+    name(left.x - radius(11) - 6, left.y, ["fog node"], "right");
+    const users = topology.users.map(px);
+    const low = users.reduce((a, b) => (b.y > a.y ? b : a));
+    name(low.x + 7, low.y, ["user"], "left");
   }
 }
