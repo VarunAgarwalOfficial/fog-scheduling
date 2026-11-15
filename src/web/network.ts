@@ -12,9 +12,54 @@ interface Particle {
 }
 
 const URGENT = 7;
+
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Whether the segment a-b enters the box (Liang-Barsky clipping). */
+function crosses(a: { x: number; y: number }, b: { x: number; y: number }, box: Box): boolean {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const sides: [number, number][] = [
+    [-dx, a.x - box.x0],
+    [dx, box.x1 - a.x],
+    [-dy, a.y - box.y0],
+    [dy, box.y1 - a.y],
+  ];
+  for (const [p, q] of sides) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return false;
+      t0 = Math.max(t0, r);
+    } else {
+      if (r < t0) return false;
+      t1 = Math.min(t1, r);
+    }
+  }
+  return t0 <= t1;
+}
+
+/** Whether a circle and a box overlap. */
+function touches(c: { x: number; y: number; r: number }, box: Box): boolean {
+  const x = Math.max(box.x0, Math.min(c.x, box.x1));
+  const y = Math.max(box.y0, Math.min(c.y, box.y1));
+  return Math.hypot(x - c.x, y - c.y) < c.r;
+}
 /** The page's typeface and smallest size, for every label on the canvas. */
 const FONT = `17px "Newsreader", "CM Web Serif", Georgia, serif`;
 const LINE = 20;
+/** The band above the cloud kept for its two-line name on a narrow screen. */
+const headroom = (width: number) => (width < 560 ? 2 * LINE + 12 : 0);
 
 /** Draws the network on a canvas and animates tasks moving along its links. */
 export class NetworkView {
@@ -50,7 +95,9 @@ export class NetworkView {
     const { canvas } = this;
     const width = canvas.clientWidth || 600;
     // Tall enough for the network, short enough that it and its controls share one screen.
-    const height = Math.round(Math.min(width * 1.1, Math.max(300, window.innerHeight * 0.55)));
+    const height = Math.round(
+      Math.min(width * 1.2, Math.max(300, window.innerHeight * 0.55)) + headroom(width),
+    );
     const ratio = window.devicePixelRatio || 1;
     if (
       canvas.width !== Math.round(width * ratio) ||
@@ -91,19 +138,21 @@ export class NetworkView {
     const { ctx, topology, colours: c } = this;
     if (!c) return;
     const { width, height } = this.fit();
-    // World coordinates run from -300 to 300 across and from -420 (the cloud) to 300 down.
-    const scale = Math.min((width - 32) / 600, (height - 32) / 720);
+    // World coordinates run from -300 to 300 across and from -420 (the cloud) to 300 down. On a
+    // narrow screen a band is kept above the cloud for its name, which has no room beside it.
+    const top = headroom(width);
+    const scale = Math.min((width - 32) / 600, (height - 32 - top) / 720);
     const px = (p: Point) => ({
       x: width / 2 + p.x * scale,
-      y: height / 2 + (p.y + 60) * scale,
+      y: top + (height - top) / 2 + (p.y + 60) * scale,
     });
     const radius = (r: number) => Math.max(r * 0.6, r * Math.min(1, scale * 1.4));
     // A fog node holds a two-figure count at the text size.
     const fogR = Math.max(14, radius(14));
     ctx.clearRect(0, 0, width, height);
 
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = c.faint;
+    ctx.lineWidth = 0.75;
+    ctx.strokeStyle = c.muted;
     topology.users.forEach((user, i) => {
       const a = px(user);
       const b = px(topology.fogs[topology.userFog[i]!]!);
@@ -123,12 +172,16 @@ export class NetworkView {
       ctx.stroke();
     }
 
-    ctx.fillStyle = c.muted;
+    // Users are small rings, so they read apart from the tasks, which are filled dots.
+    ctx.fillStyle = c.bg;
+    ctx.strokeStyle = c.muted;
+    ctx.lineWidth = 1.5;
     for (const user of topology.users) {
       const p = px(user);
       ctx.beginPath();
       ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     }
 
     this.particles = this.particles.filter((p) => p.end > time);
@@ -146,7 +199,7 @@ export class NetworkView {
     const label = (p: { x: number; y: number }, r: number, fill: string, text: string) => {
       ctx.fillStyle = fill;
       ctx.strokeStyle = c.bg;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
@@ -165,25 +218,99 @@ export class NetworkView {
     const cloudText = `${busy}+${waiting}`;
     ctx.font = FONT;
     // Wide enough for its count at the text size, whatever the count.
-    const cloudR = Math.max(radius(24), ctx.measureText(cloudText).width / 2 + 7);
+    const cloudR = Math.max(radius(24), ctx.measureText(cloudText).width / 2 + 10);
     label(cloud, cloudR, c.series[2]!, cloudText);
 
-    // Name the parts where they sit: the cloud, and one fog node and one user as examples.
-    const name = (x: number, y: number, lines: string[], align: CanvasTextAlign) => {
-      ctx.fillStyle = c.ink;
-      ctx.textAlign = align;
+    // Name the parts where they sit: the cloud, and one fog node and one user as examples. Each
+    // name goes where it crosses no link, dot, node or other name, trying the examples in turn.
+    const links: [Point, Point][] = [
+      ...topology.users.map((u, i): [Point, Point] => [
+        px(u),
+        px(topology.fogs[topology.userFog[i]!]!),
+      ]),
+      ...topology.fogs.map((f): [Point, Point] => [px(f), cloud]),
+    ];
+    const fogs = topology.fogs.map(px);
+    const users = topology.users.map(px);
+    const discs = [
+      ...fogs.map((f) => ({ ...f, r: fogR + 2 })),
+      ...users.map((u) => ({ ...u, r: 5 })),
+      { ...cloud, r: cloudR + 2 },
+    ];
+    const placed: Box[] = [];
+    ctx.font = FONT;
+    const ink = ctx.measureText("Hg");
+    const asc = ink.actualBoundingBoxAscent;
+    const desc = ink.actualBoundingBoxDescent;
+    const boxOf = (x: number, y: number, lines: string[], align: CanvasTextAlign): Box => {
+      const w = Math.max(...lines.map((line) => ctx.measureText(line).width));
+      const x0 = align === "left" ? x : align === "right" ? x - w : x - w / 2;
+      const top = y - ((lines.length - 1) / 2) * LINE - asc;
+      return {
+        x0: x0 - 2,
+        x1: x0 + w + 2,
+        y0: top - 2,
+        y1: top + (lines.length - 1) * LINE + asc + desc + 2,
+      };
+    };
+    const clashes = (box: Box): number => {
+      let n = 0;
+      if (box.x0 < 2 || box.y0 < 2 || box.x1 > width - 2 || box.y1 > height - 2) n += 100;
+      for (const d of discs) if (touches(d, box)) n += 10;
+      for (const b of placed)
+        if (b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1) n += 10;
+      for (const [a, b] of links) if (crosses(a, b, box)) n += 1;
+      return n;
+    };
+    const name = (anchors: { x: number; y: number }[], r: number, lines: string[]) => {
+      const h = (lines.length - 1) * LINE + asc + desc;
+      let best: { x: number; y: number; align: CanvasTextAlign; box: Box; n: number } | null = null;
+      for (const p of anchors) {
+        const spots: [number, number, CanvasTextAlign][] = [
+          [p.x + r + 7, p.y, "left"],
+          [p.x - r - 7, p.y, "right"],
+          [p.x, p.y - r - 6 - h / 2, "center"],
+          [p.x, p.y + r + 6 + h / 2, "center"],
+          [p.x + r + 4, p.y - r - h / 2, "left"],
+          [p.x - r - 4, p.y - r - h / 2, "right"],
+          [p.x + r + 4, p.y + r + h / 2, "left"],
+          [p.x - r - 4, p.y + r + h / 2, "right"],
+        ];
+        for (const [x, y, align] of spots) {
+          const box = boxOf(x, y, lines, align);
+          const n = clashes(box);
+          if (!best || n < best.n) best = { x, y, align, box, n };
+          if (n === 0) break;
+        }
+        if (best?.n === 0) break;
+      }
+      if (!best) return;
+      const at = best;
+      placed.push(at.box);
+      ctx.textAlign = at.align;
       ctx.textBaseline = "middle";
       ctx.font = FONT;
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = c.bg;
+      ctx.fillStyle = c.ink;
       lines.forEach((line, i) => {
-        ctx.fillText(line, x, y + (i - (lines.length - 1) / 2) * LINE);
+        const y = at.y + (i - (lines.length - 1) / 2) * LINE;
+        // A halo in the page colour, so a link passing close by stops short of the letters.
+        ctx.strokeText(line, at.x, y);
+        ctx.fillText(line, at.x, y);
       });
     };
-    name(cloud.x + cloudR + 8, cloud.y, ["cloud: busy servers", "+ tasks waiting"], "left");
-    const fogs = topology.fogs.map(px);
-    const left = fogs.reduce((a, b) => (b.x < a.x ? b : a));
-    name(left.x - fogR - 6, left.y, ["fog node"], "right");
-    const users = topology.users.map(px);
-    const low = users.reduce((a, b) => (b.y > a.y ? b : a));
-    name(low.x + 7, low.y, ["user"], "left");
+    name([cloud], cloudR + 1, ["cloud: busy servers", "+ tasks waiting"]);
+    name(
+      [...fogs].sort((a, b) => a.x - b.x),
+      fogR,
+      ["fog node"],
+    );
+    name(
+      [...users].sort((a, b) => b.y - a.y),
+      3,
+      ["user"],
+    );
   }
 }

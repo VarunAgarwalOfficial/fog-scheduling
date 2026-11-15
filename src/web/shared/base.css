@@ -323,7 +323,7 @@ input[type="range"] {
 
 .legend li {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
 }
 

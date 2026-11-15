@@ -58,6 +58,7 @@
 }
 
 .dot {
+  --mark-height: 0.5rem;
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
@@ -65,8 +66,14 @@
 }
 
 .dot.big {
+  --mark-height: 0.85rem;
   width: 0.85rem;
   height: 0.85rem;
+}
+
+.dot.ring {
+  background: none;
+  border: 1.5px solid currentColor;
 }
 
 .charts {
@@ -221,11 +228,13 @@ caption {
 }
 
 .swatch.line {
+  --mark-height: 2px;
   height: 2px;
   width: 1rem;
 }
 
 .swatch.dashed {
+  --mark-height: 2px;
   height: 0;
   width: 1rem;
   background: none;
@@ -246,4 +255,10 @@ details {
 summary {
   cursor: pointer;
   color: var(--muted);
+}
+
+/* Each key mark is centred on the first line of its text, so it stays in line when the text wraps. */
+.legend li > span:first-child {
+  flex: none;
+  margin-top: calc((1lh - var(--mark-height, 0.75rem)) / 2);
 }
