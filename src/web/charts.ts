@@ -67,6 +67,8 @@ export interface BarRow {
   mean: number;
   /** Half-width of the 95% interval. */
   half: number;
+  /** Drawn as an outline rather than filled, for a policy sharing its colour with another. */
+  hollow?: boolean;
 }
 
 export function barChart(
@@ -77,9 +79,10 @@ export function barChart(
   format: (value: number) => string,
 ): void {
   const width = frame(figure, title, subtitle);
-  const rowHeight = 34;
+  // Each row: the label and value on one line at the text size, the bar under them.
+  const rowHeight = 46;
   const top = 2;
-  const axis = 18;
+  const axis = 28;
   const right = 12;
   const height = top + rows.length * rowHeight + axis;
   const highest = Math.max(...rows.map((r) => r.mean + (Number.isFinite(r.half) ? r.half : 0)));
@@ -103,7 +106,7 @@ export function barChart(
         {
           class: "tick",
           x: Math.min(x(tick), width - 4),
-          y: height - 4,
+          y: height - 6,
           "text-anchor": tick === 0 ? "start" : "end",
         },
         format(tick),
@@ -119,18 +122,24 @@ export function barChart(
     const value = `${format(row.mean)}${Number.isFinite(row.half) ? ` ± ${format(row.half)}` : ""}`;
     group.append(
       el("rect", { x: 0, y, width, height: rowHeight, fill: "transparent" }),
-      el("text", { class: "label", x: 0, y: y + 12 }, row.label),
-      el("text", { class: "value", x: width - right, y: y + 12, "text-anchor": "end" }, value),
-      el("path", {
-        d: `M0 ${y + 17}h${w - 3}a3 3 0 0 1 3 3v4a3 3 0 0 1 -3 3h${-(w - 3)}z`,
-        style: `fill: ${row.colour}`,
-      }),
+      el("text", { class: "label", x: 6, y: y + 17 }, row.label),
+      el("text", { class: "value", x: width - right, y: y + 17, "text-anchor": "end" }, value),
+      row.hollow
+        ? el("rect", {
+            class: "hollow",
+            x: 1,
+            y: y + 26,
+            width: Math.max(w - 2, 2),
+            height: 10,
+            style: `stroke: ${row.colour}`,
+          })
+        : el("rect", { x: 0, y: y + 25, width: w, height: 12, style: `fill: ${row.colour}` }),
     );
     if (Number.isFinite(row.half) && hi - lo >= 1) {
       group.append(
         el("path", {
           class: "whisker",
-          d: `M${lo} ${y + 22}H${hi}M${lo} ${y + 18}v8M${hi} ${y + 18}v8`,
+          d: `M${lo} ${y + 31}H${hi}M${lo} ${y + 26}v10M${hi} ${y + 26}v10`,
         }),
       );
     }
@@ -171,10 +180,12 @@ export interface LineOptions {
 
 export function lineChart(figure: HTMLElement, o: LineOptions): void {
   const width = frame(figure, o.title, o.subtitle);
-  const height = 260;
-  const m = { left: 44, right: 14, top: 26, bottom: 40 };
+  const height = 290;
   const all = o.series.flatMap((s) => s.values.map((v, i) => v + (s.half?.[i] ?? 0)));
   const ticks = niceTicks(Math.max(...all.filter(Number.isFinite), 0));
+  // Room on the left for the longest y label at the text size (a figure is about 9 px wide).
+  const longest = Math.max(...ticks.map((t) => o.yFormat(t).length));
+  const m = { left: longest * 9 + 14, right: 14, top: 36, bottom: 56 };
   const end = ticks.at(-1)!;
   const x0 = o.x[0]!;
   const x1 = o.x.at(-1)!;
@@ -193,18 +204,18 @@ export function lineChart(figure: HTMLElement, o: LineOptions): void {
       el("line", { class: "grid", x1: m.left, x2: width - m.right, y1: sy(tick), y2: sy(tick) }),
       el(
         "text",
-        { class: "tick", x: m.left - 6, y: sy(tick) + 4, "text-anchor": "end" },
+        { class: "tick", x: m.left - 8, y: sy(tick) + 6, "text-anchor": "end" },
         o.yFormat(tick),
       ),
     );
   }
-  const every = Math.ceil(o.x.length / Math.max(2, Math.floor((width - m.left) / 48)));
+  const every = Math.ceil(o.x.length / Math.max(2, Math.floor((width - m.left) / 64)));
   o.x.forEach((v, i) => {
     if (i % every !== 0 && i !== o.x.length - 1) return;
     svg.append(
       el(
         "text",
-        { class: "tick", x: sx(v), y: height - m.bottom + 16, "text-anchor": "middle" },
+        { class: "tick", x: sx(v), y: height - m.bottom + 22, "text-anchor": "middle" },
         o.xFormat(v),
       ),
     );
@@ -213,10 +224,10 @@ export function lineChart(figure: HTMLElement, o: LineOptions): void {
     el("line", { class: "axis", x1: m.left, x2: width - m.right, y1: sy(0), y2: sy(0) }),
     el(
       "text",
-      { class: "tick", x: (m.left + width - m.right) / 2, y: height - 6, "text-anchor": "middle" },
+      { class: "tick", x: (m.left + width - m.right) / 2, y: height - 5, "text-anchor": "middle" },
       o.xTitle,
     ),
-    el("text", { class: "tick", x: 0, y: 12 }, o.yTitle),
+    el("text", { class: "tick", x: 0, y: 17 }, o.yTitle),
   );
   for (const s of o.series) {
     const points = s.values

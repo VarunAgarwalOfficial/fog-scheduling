@@ -36,8 +36,8 @@
 #network {
   width: 100%;
   background: var(--canvas-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
+  border-top: var(--site-rule-width) solid var(--border);
+  border-bottom: var(--site-rule-width) solid var(--border);
 }
 
 .stats {
@@ -54,7 +54,6 @@
 
 .stats dd {
   margin: 0;
-  font-family: var(--mono);
   font-variant-numeric: lining-nums tabular-nums;
 }
 
@@ -90,13 +89,12 @@ figure {
 
 figcaption {
   margin-bottom: var(--space-2);
-  font-weight: 600;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
 }
 
 figcaption small {
   display: block;
-  font-weight: 400;
+  font-size: var(--text-sm);
   color: var(--muted);
 }
 
@@ -108,7 +106,8 @@ figcaption small {
 
 .chart text {
   fill: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .chart text.label {
@@ -117,7 +116,12 @@ figcaption small {
 
 .chart text.value {
   fill: var(--ink);
-  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* A policy that shares its colour with another is drawn as an outline. */
+.chart .hollow {
+  fill: var(--canvas-bg);
+  stroke-width: 2;
 }
 
 .chart .grid {
@@ -145,11 +149,11 @@ figcaption small {
 }
 
 .chart .band {
-  opacity: 0.16;
+  opacity: 0.14;
 }
 
 .chart .dot {
-  stroke: var(--surface);
+  stroke: var(--canvas-bg);
   stroke-width: 2;
 }
 
@@ -170,7 +174,7 @@ caption {
 }
 
 #results tbody th {
-  font-weight: 500;
+  font-style: normal;
   color: var(--ink);
   text-align: left;
 }
@@ -188,8 +192,9 @@ caption {
   color: var(--muted);
 }
 
+/* A difference within its interval: in italics, not faded, so it keeps its contrast. */
 #results tr.diff td.unsure {
-  opacity: 0.6;
+  font-style: italic;
 }
 
 #results tbody tr:has(+ tr.diff) > * {
@@ -202,9 +207,10 @@ caption {
   max-width: 20rem;
   padding: var(--space-2) var(--space-3);
   background: var(--surface);
-  border: 1px solid var(--border-strong);
+  border: var(--site-rule-width) solid var(--border-strong);
   border-radius: var(--radius-small);
   font-size: var(--text-sm);
+  font-variant-numeric: lining-nums tabular-nums;
   pointer-events: none;
 }
 
@@ -225,6 +231,11 @@ caption {
   background: none;
   border-top: 2px dashed currentColor;
   border-radius: 0;
+}
+
+.swatch.hollow {
+  background: none;
+  border: 2px solid currentColor;
 }
 
 details {

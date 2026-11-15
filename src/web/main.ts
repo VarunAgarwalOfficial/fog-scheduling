@@ -8,7 +8,7 @@ import type { LoadPoint } from "../core/theory.ts";
 import { buildTopology, generateWorkload } from "../core/workload.ts";
 import { barChart, hideTooltip, lineChart } from "./charts.ts";
 import { NetworkView } from "./network.ts";
-import { palette } from "./shared/theme.js";
+import { onThemeChange, palette } from "./shared/theme.js";
 import type { Job, PlainExperiment, Reply } from "./worker.ts";
 
 interface Field {
@@ -34,9 +34,30 @@ const fields: Field[] = [
   { key: "seeds", label: "Seeds (workloads)", min: 2, max: 30, step: 1 },
 ];
 
-/** Colour of a policy: fixed by its place in the list, never by rank. */
-const colourOf = (id: string): string =>
-  `var(--canvas-series-${policies.findIndex((p) => p.id === id) + 1})`;
+/**
+ * How a policy is drawn: fixed by policy, never by rank. There are six policies and the site has
+ * four meaning colours, so the two variants share a colour with the policy they vary and are
+ * told apart by a pattern: weighted shortest job first is drawn dashed and hollow in the colour
+ * of shortest job first, ageing in the colour of the hybrid. The policies drawn together on one
+ * chart, other than all six, never share a colour.
+ */
+const MARKS: Record<string, { series: number; hollow?: boolean }> = {
+  fcfs: { series: 1 },
+  priority: { series: 2 },
+  sjf: { series: 3 },
+  hybrid: { series: 4 },
+  wsjf: { series: 3, hollow: true },
+  ageing: { series: 4, hollow: true },
+};
+const colourOf = (id: string): string => `var(--canvas-series-${MARKS[id]?.series ?? 1})`;
+const hollowOf = (id: string): boolean => MARKS[id]?.hollow === true;
+/** A legend or table swatch for a policy: a filled square, or an outlined one for a variant. */
+const swatchOf = (id: string): HTMLSpanElement => {
+  const swatch = document.createElement("span");
+  swatch.className = hollowOf(id) ? "swatch hollow" : "swatch";
+  swatch.style.color = colourOf(id);
+  return swatch;
+};
 /** Names as the page shows them: abbreviations spelled out. */
 const plainLabels: Record<string, string> = { hybrid: "Shortest job first + priority" };
 const labelOf = (id: string): string => plainLabels[id] ?? getPolicy(id).label;
@@ -447,10 +468,7 @@ function renderLegend(target: HTMLElement): void {
   target.replaceChildren(
     ...policies.map((p) => {
       const li = document.createElement("li");
-      const swatch = document.createElement("span");
-      swatch.className = "swatch";
-      swatch.style.color = colourOf(p.id);
-      li.append(swatch, labelOf(p.id));
+      li.append(swatchOf(p.id), labelOf(p.id));
       return li;
     }),
   );
@@ -471,6 +489,7 @@ function renderComparison(): void {
       e.results.map((r) => ({
         label: labelOf(r.policy),
         colour: colourOf(r.policy),
+        hollow: hollowOf(r.policy),
         mean: r.stats[s.key].mean * scale,
         half: r.stats[s.key].half * scale,
       })),
@@ -505,10 +524,7 @@ function renderComparison(): void {
     const row = body.insertRow();
     const th = document.createElement("th");
     th.scope = "row";
-    const swatch = document.createElement("span");
-    swatch.className = "swatch";
-    swatch.style.color = colourOf(r.policy);
-    th.append(swatch, labelOf(r.policy));
+    th.append(swatchOf(r.policy), labelOf(r.policy));
     row.append(th);
     for (const [key, f] of columns) row.insertCell().textContent = ci(r.stats[key], f);
     if (i === 0) return;
@@ -538,6 +554,7 @@ function renderComparison(): void {
     series: e.results.map((r) => ({
       label: labelOf(r.policy),
       colour: colourOf(r.policy),
+      dashed: hollowOf(r.policy),
       values: r.byPriority.map((i) => i.mean),
     })),
     legend: $("priority-legend"),
@@ -553,6 +570,7 @@ function renderTheory(): void {
   const pick = (id: string, key: "meanWait" | "lowTailWait") => ({
     label: labelOf(id),
     colour: colourOf(id),
+    dashed: hollowOf(id),
     values: loads!.map((pt) => pt.runs[at(id)]![key].mean),
     half: loads!.map((pt) => pt.runs[at(id)]![key].half),
   });
@@ -647,7 +665,7 @@ function redrawAll(): void {
 }
 
 // No theme button: the page follows the system colour scheme, as the host page does.
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+onThemeChange(() => {
   view.setColours(palette());
   view.draw(clock);
 });

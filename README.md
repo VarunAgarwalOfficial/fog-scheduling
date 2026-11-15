@@ -181,7 +181,7 @@ The browser view animates one policy on the network and shows all six as interva
 with the difference from first come, first served, response time by priority, and the one-queue
 check against load. The seeds run in a web worker, so the page stays responsive, and changing a
 setting cancels the run in progress. Settings live in the address, so a copied link reproduces
-the page. It has light and dark themes, works on a phone and can be used from the keyboard.
+the page. It follows the system's light or dark setting, works on a phone and can be used from the keyboard.
 `npm run build` writes a static site to `dist/`. To use another port, run `PORT=4000 npm run dev`
 or copy `.env.example` to `.env`.
 
@@ -205,11 +205,46 @@ src/core/experiment.ts   replications and confidence intervals
 src/core/theory.ts       the one-queue check and its formula
 src/cli.ts       command line: compare and theory
 src/web/         browser view: network animation, SVG charts, worker.ts runs the seeds
-src/web/shared/  style, theme switch and fonts shared with the author's other projects
+src/web/shared/  base style, canvas palette and the site's tokens, shared with the author's other projects
+public/fonts/    the fonts the tokens name, with their licences
 test/            tests for the core
 ```
 
-The page uses IBM Plex (SIL Open Font License, `src/web/shared/fonts/OFL.txt`).
+## The look
+
+The page uses the look of the author's site. `src/web/shared/c-editorial-tokens.css` is the
+site's token file, copied unchanged; `src/web/shared/base.css` gives this project's own names
+(`--ink`, `--canvas-series-1` and so on) the token values, so every colour, size, space, font and
+rule comes from it. Type is Newsreader (SIL Open Font License, `public/fonts/Newsreader-OFL.txt`);
+the token file also names IBM Plex Mono and CM Web Serif, whose licences are beside them. Dark
+follows the system setting.
+
+The site has four meaning colours, used the same way in all the author's tools:
+
+| Meaning colour   | In the tools generally           | Here                                |
+| ---------------- | -------------------------------- | ----------------------------------- |
+| open (violet)    | the current item; series 1       | first come, first served; fog nodes |
+| against (red)    | written, moved, wrong; series 2  | priority; urgent tasks              |
+| measured (ochre) | being read or compared; series 3 | shortest job first; the cloud       |
+| proved (green)   | finished, the answer; series 4   | hybrid                              |
+
+There are six policies and four colours, so the two variants take the colour of the policy they
+vary and a pattern: weighted shortest job first is shortest job first's ochre, ageing is the
+hybrid's green, both drawn as hollow bars and dashed lines with outlined swatches. Charts that
+show fewer than six policies never put two in one colour. Users, other tasks and the formula line
+are in the ink or the muted ink.
+
+Removed: IBM Plex Sans and Mono, the teal palette, the boxed and rounded network frame (now a rule
+above and below), rounded bar ends, mono and bold figures, and the faded "within the interval"
+cells, which are now in italics so they keep their contrast. Moved because labels are now 17 px:
+bar rows grew from 34 to 46 px and their axis from 18 to 28; line charts grew from 260 to 290 px,
+their left margin follows the widest label and the x labels are at least 64 px apart (was 48);
+fog nodes are at least 14 px across the radius and the cloud grows to fit its count; label lines
+are 20 px apart (was 15).
+
+Contrast, checked with the WCAG 2 formula on the token values: text 15.1 to 1 light and 13.8
+dark, muted text 5.9 and 7.1; the four meaning colours against the page are 4.9 to 6.1 light and
+6.8 to 7.8 dark; the page colour on a fog node is 5.8 and 7.3 and on the cloud 4.9 and 7.8.
 
 ## Differences from the original
 

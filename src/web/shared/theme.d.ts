@@ -9,8 +9,8 @@ export interface Palette {
   change: string;
   good: string;
   visit: string;
+  /** The four meaning colours: open, against, measured, proved. */
   series: string[];
 }
 export function palette(): Palette;
 export function onThemeChange(fn: () => void): void;
-export function initTheme(button: HTMLButtonElement): void;

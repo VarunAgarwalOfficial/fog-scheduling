@@ -12,6 +12,9 @@ interface Particle {
 }
 
 const URGENT = 7;
+/** The page's typeface and smallest size, for every label on the canvas. */
+const FONT = `17px "Newsreader", "CM Web Serif", Georgia, serif`;
+const LINE = 20;
 
 /** Draws the network on a canvas and animates tasks moving along its links. */
 export class NetworkView {
@@ -95,6 +98,8 @@ export class NetworkView {
       y: height / 2 + (p.y + 60) * scale,
     });
     const radius = (r: number) => Math.max(r * 0.6, r * Math.min(1, scale * 1.4));
+    // A fog node holds a two-figure count at the text size.
+    const fogR = Math.max(14, radius(14));
     ctx.clearRect(0, 0, width, height);
 
     ctx.lineWidth = 1;
@@ -147,33 +152,36 @@ export class NetworkView {
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = c.bg;
-      ctx.font = `600 ${r > 14 ? 12 : 11}px "IBM Plex Sans", system-ui, sans-serif`;
+      ctx.font = FONT;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(text, p.x, p.y + 0.5);
     };
     topology.fogs.forEach((fog, i) => {
-      label(px(fog), radius(11), c.accent, String(this.last?.fogLoad[i] ?? 0));
+      label(px(fog), fogR, c.accent, String(this.last?.fogLoad[i] ?? 0));
     });
     const busy = this.last?.cloudBusy ?? 0;
     const waiting = this.last?.cloudWaiting ?? 0;
-    const cloudR = radius(22);
-    label(cloud, cloudR, c.series[2]!, `${busy}+${waiting}`);
+    const cloudText = `${busy}+${waiting}`;
+    ctx.font = FONT;
+    // Wide enough for its count at the text size, whatever the count.
+    const cloudR = Math.max(radius(24), ctx.measureText(cloudText).width / 2 + 7);
+    label(cloud, cloudR, c.series[2]!, cloudText);
 
     // Name the parts where they sit: the cloud, and one fog node and one user as examples.
     const name = (x: number, y: number, lines: string[], align: CanvasTextAlign) => {
       ctx.fillStyle = c.ink;
       ctx.textAlign = align;
       ctx.textBaseline = "middle";
-      ctx.font = `12px "IBM Plex Sans", system-ui, sans-serif`;
+      ctx.font = FONT;
       lines.forEach((line, i) => {
-        ctx.fillText(line, x, y + (i - (lines.length - 1) / 2) * 15);
+        ctx.fillText(line, x, y + (i - (lines.length - 1) / 2) * LINE);
       });
     };
     name(cloud.x + cloudR + 8, cloud.y, ["cloud: busy servers", "+ tasks waiting"], "left");
     const fogs = topology.fogs.map(px);
     const left = fogs.reduce((a, b) => (b.x < a.x ? b : a));
-    name(left.x - radius(11) - 6, left.y, ["fog node"], "right");
+    name(left.x - fogR - 6, left.y, ["fog node"], "right");
     const users = topology.users.map(px);
     const low = users.reduce((a, b) => (b.y > a.y ? b : a));
     name(low.x + 7, low.y, ["user"], "left");
