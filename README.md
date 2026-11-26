@@ -160,7 +160,7 @@ On the same queue the other textbook results show up as expected:
 - L. Kleinrock, "A conservation law for a wide class of queueing disciplines", Naval Research
   Logistics Quarterly 12(2), 181-192, 1965.
 
-## Run
+## Run it
 
 Needs Node 23.6 or newer (it runs TypeScript directly).
 
@@ -262,3 +262,11 @@ dark, muted text 5.9 and 7.1; the four meaning colours against the page are 4.9 
 
 Rebuilt from a 2022 VIT group course project for BCT3005 Fundamentals of Fog and Edge Computing:
 [BCT3005-Fog-and-Cloud-Network-Simulation-and-Task-Scheduling-Algorithm](https://github.com/VarunAgarwalOfficial/BCT3005-Fog-and-Cloud-Network-Simulation-and-Task-Scheduling-Algorithm).
+
+## Status
+
+Working, as of 26 November 2026. See [STATUS.md](STATUS.md).
+
+## Licence
+
+MIT (see [LICENSE](LICENSE)).
