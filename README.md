@@ -4,7 +4,7 @@
 
 Six task scheduling policies compared on a fog and cloud simulation over many seeds, with confidence intervals.
 
-[Live demo](https://varunagarwalofficial.github.io/fog-scheduling/) · [MIT licence](LICENSE)
+[Live demo](https://varunswaika.github.io/fog-scheduling/) · [MIT licence](LICENSE)
 
 A separate
 check strips the network down to one queue and compares the simulator with queueing theory.
@@ -266,7 +266,7 @@ dark, muted text 5.9 and 7.1; the four meaning colours against the page are 4.9 
 ## Credit
 
 Rebuilt from a 2022 VIT group course project for BCT3005 Fundamentals of Fog and Edge Computing:
-[BCT3005-Fog-and-Cloud-Network-Simulation-and-Task-Scheduling-Algorithm](https://github.com/VarunAgarwalOfficial/BCT3005-Fog-and-Cloud-Network-Simulation-and-Task-Scheduling-Algorithm).
+[BCT3005-Fog-and-Cloud-Network-Simulation-and-Task-Scheduling-Algorithm](https://github.com/varunswaika/BCT3005-Fog-and-Cloud-Network-Simulation-and-Task-Scheduling-Algorithm).
 
 ## Status
 
