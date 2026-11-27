@@ -1,7 +1,12 @@
+<p align="center"><img src="docs/banner.png" alt="Pixel art: bees carry tasks up to three small clouds" width="100%"></p>
+
 # Fog scheduling
 
-A simulation of users, fog nodes and a cloud that runs six task scheduling policies on the same
-workloads, over many seeds, and reports each result with a 95% confidence interval. A separate
+Six task scheduling policies compared on a fog and cloud simulation over many seeds, with confidence intervals.
+
+[MIT licence](LICENSE)
+
+A separate
 check strips the network down to one queue and compares the simulator with queueing theory.
 
 ![The browser view: settings, the animated network, interval charts for six policies and the one-queue check](docs/screenshot.png)
