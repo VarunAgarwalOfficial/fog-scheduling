@@ -4,7 +4,7 @@
 
 Six task scheduling policies compared on a fog and cloud simulation over many seeds, with confidence intervals.
 
-[MIT licence](LICENSE)
+[Live demo](https://varunagarwalofficial.github.io/fog-scheduling/) · [MIT licence](LICENSE)
 
 A separate
 check strips the network down to one queue and compares the simulator with queueing theory.
